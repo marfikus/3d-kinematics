@@ -49,10 +49,7 @@ int points[][3] = {
 int points_size = 6;
 
 int point_counter = 0;
-bool point_reached = false;
-bool zero_reached = false;
 bool await_start_from_button = true;
-bool head_moved = false;
 
 void detect_current_mode() {
     if (digitalRead(sw2) == HIGH) {
@@ -124,10 +121,11 @@ void setZero() {
     }
 }
 
-void goToZero() {
+bool goToZero() {
     bool x_zero_reached = false;
     bool y_zero_reached = false;
     bool z_zero_reached = false;
+    bool zero_reached = false;
 
     // если одновременно 4 движка включить, то питание проседает
     // поэтому сначала выгоняю в 0 ось z, а потом x, y
@@ -160,12 +158,15 @@ void goToZero() {
 
     if (x_zero_reached && y_zero_reached && z_zero_reached) {
         zero_reached = true;
-    }        
+    }
+
+    return zero_reached;
 }
 
-void goToPoint(int x, int y) {
+bool goToPoint(int x, int y) {
     bool x_reached = false;
     bool y_reached = false;
+    bool point_reached = false;
 
     if (stepper_x.getCurrent() != x) {
         if (!stepper_x.tick()) {
@@ -188,11 +189,14 @@ void goToPoint(int x, int y) {
     if (x_reached && y_reached) {
         point_reached = true;
     }
+
+    return point_reached;
 }
 
-void moveHead(int z) {
+bool moveHead(int z) {
     long up_pos = 1000;
     long down_pos = 1500;
+    bool head_moved = false;
 
     if (z == 0) {
         if (stepper_z.getCurrent() != up_pos) {
@@ -213,6 +217,8 @@ void moveHead(int z) {
             head_moved = true;
         }
     }
+
+    return head_moved;
 }
 
 void setupCalibrationMode() {
@@ -317,11 +323,10 @@ void loop()	{
         }
 
         if (work_state == GOING_TO_ZERO) {
-            goToZero();
-
+            bool zero_reached = goToZero();
+            
             if (zero_reached) {
                 work_state = NONE;
-                zero_reached = false;
             }
         } else if (work_state == GOING_BY_POINTS) {
 
@@ -329,12 +334,12 @@ void loop()	{
             // if (!await_start_from_button) {
 
                 int z = points[point_counter][0];
-                moveHead(z);
+                bool head_moved = moveHead(z);
 
                 if (head_moved) {
                     int x = points[point_counter][1];
                     int y = points[point_counter][2];
-                    goToPoint(x, y);
+                    bool point_reached = goToPoint(x, y);
 
                     if (point_reached) {
                         // delay(1000);
@@ -350,8 +355,6 @@ void loop()	{
                             point_counter = 0;
                             work_state = GOING_TO_ZERO;
                         }
-                        head_moved = false;
-                        point_reached = false;
                         await_start_from_button = true;
                     }
                 }
