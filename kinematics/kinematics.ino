@@ -28,6 +28,11 @@ enum {
     GOING_BY_POINTS
 } work_state;
 
+enum {
+    UP,
+    DOWN
+} head_position;
+
 float speed_x = 400; // для одного движка, больше 540 уже клинит иногда
 float speed_y = 400; // для одного движка, больше 540 уже клинит иногда
 float speed_z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
@@ -38,16 +43,25 @@ bool work_mode_is_setted = false;
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
 // второй элемент - координата х
 // третий элемент - координата у
-int points[][3] = {
-    {0, 1000, 1000},
-    {1, 1000, 2000},
-    {1, 2000, 2000},
-    {1, 2000, 1000},
-    {1, 1000, 1000},
-    {0, 0, 0},
-};
-int points_size = 6;
 
+// прямоугольник
+/*int points[][3] = {
+    {0, 3000, 1000},
+    {1, 3000, 2000},
+    {1, 4000, 2000},
+    {1, 4000, 1000},
+    {1, 3000, 1000}
+};*/
+
+//прямоугольный треугольник
+int points[][3] = {
+    {0, 1700, 600},
+    {1, 1700, 3600},
+    {1, 4700, 600},
+    {1, 1700, 600},
+};
+
+int points_size = sizeof(points) / sizeof(points[0]);
 int point_counter = 0;
 bool await_start_from_button = true;
 
@@ -124,19 +138,15 @@ void setZero() {
 bool goToZero() {
     bool x_zero_reached = false;
     bool y_zero_reached = false;
-    bool z_zero_reached = false;
+    // bool z_zero_reached = false;
     bool zero_reached = false;
 
-    // если одновременно 4 движка включить, то питание проседает
-    // поэтому сначала выгоняю в 0 ось z, а потом x, y
-    if (stepper_z.getCurrent() != 0) {
-        if (!stepper_z.tick()) {
-            stepper_z.setTarget(0);
-        }
-    } else {
-        stepper_z.brake();
-        z_zero_reached = true;
+    // Если одновременно включить 4 движка, то питание проседает,
+    // поэтому сначала выгоняю в 0 оси X, Y, а потом Z.
+    // Да и поскольку сейчас 0 у Z это нижняя точка, то надо сначала увести стол.
 
+    // если голова поднята, то выгоняем оси, иначе сначала поднимаем голову
+    if (head_position == UP) {
         if (stepper_x.getCurrent() != 0) {
             if (!stepper_x.tick()) {
                 stepper_x.setTarget(0);
@@ -154,10 +164,15 @@ bool goToZero() {
             stepper_y.brake();
             y_zero_reached = true;
         }
+    } else {
+        moveHead(0);
     }
 
-    if (x_zero_reached && y_zero_reached && z_zero_reached) {
-        zero_reached = true;
+    if (x_zero_reached && y_zero_reached) {
+        bool head_moved = moveHead(1);
+        if (head_moved) {
+            zero_reached = true;
+        }
     }
 
     return zero_reached;
@@ -175,15 +190,15 @@ bool goToPoint(int x, int y) {
     } else {
         stepper_x.brake();
         x_reached = true;
+    }
 
-        if (stepper_y.getCurrent() != y) {
-            if (!stepper_y.tick()) {
-                stepper_y.setTarget(y);
-            }
-        } else {
-            stepper_y.brake();
-            y_reached = true;
-        }        
+    if (stepper_y.getCurrent() != y) {
+        if (!stepper_y.tick()) {
+            stepper_y.setTarget(y);
+        }
+    } else {
+        stepper_y.brake();
+        y_reached = true;
     }
 
     if (x_reached && y_reached) {
@@ -194,8 +209,8 @@ bool goToPoint(int x, int y) {
 }
 
 bool moveHead(int z) {
-    long up_pos = 1000;
-    long down_pos = 1500;
+    long up_pos = -500;
+    long down_pos = 0;
     bool head_moved = false;
 
     if (z == 0) {
@@ -206,6 +221,7 @@ bool moveHead(int z) {
         } else {
             stepper_z.brake();
             head_moved = true;
+            head_position = UP;
         }
     } else if (z == 1) {
         if (stepper_z.getCurrent() != down_pos) {
@@ -215,6 +231,7 @@ bool moveHead(int z) {
         } else {
             stepper_z.brake();
             head_moved = true;
+            head_position = DOWN;
         }
     }
 
@@ -347,9 +364,9 @@ void loop()	{
                         Serial.print(" ");
                         Serial.print(y);
                         Serial.println(" point reached");
-                        if (point_counter < points_size - 1) {
-                            point_counter++;
-                        } else {
+
+                        point_counter++;
+                        if (point_counter == points_size) {
                             Serial.println("End of points array");
                             Serial.println("Going to zero");
                             point_counter = 0;
