@@ -1,8 +1,8 @@
 #include <GyverStepper.h>
 
-GStepper<STEPPER4WIRE> stepper_x(2048, 13, 11, 12, 10);
-GStepper<STEPPER4WIRE> stepper_y(2048, 9, 7, 8, 6);
-GStepper<STEPPER4WIRE> stepper_z(2048, 5, 3, 4, 2);
+GStepper<STEPPER4WIRE> stepperX(2048, 13, 11, 12, 10);
+GStepper<STEPPER4WIRE> stepperY(2048, 9, 7, 8, 6);
+GStepper<STEPPER4WIRE> stepperZ(2048, 5, 3, 4, 2);
 
 byte bt1 = A0;
 byte bt2 = A1;
@@ -15,31 +15,31 @@ enum {
     X,
     Y,
     Z
-} current_axis;
+} currentAxis;
 
 enum {
     CALIBRATION,
     WORK
-} current_mode;
+} currentMode;
 
 enum {
     NONE,
     GOING_TO_ZERO,
     GOING_BY_POINTS,
     HEAD_MOVING
-} work_state;
+} workState;
 
 enum {
     UP,
     DOWN
-} head_position;
+} headPosition;
 
 const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
 const float SPEED_Y = 400; // для одного движка, больше 540 уже клинит иногда
 const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
 
-bool calibration_mode_is_setted = false;
-bool work_mode_is_setted = false;
+bool calibrationModeActive = false;
+bool workModeActive = false;
 
 // массив точек:
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
@@ -64,229 +64,229 @@ const int POINTS[][3] = {
 };*/
 
 const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
-int current_point = 0;
+int currentPoint = 0;
 
 // активация режима выполнения каждого шага по нажатию кнопки
 const bool NEXT_STEP_FROM_BUTTON = false;
-bool await_button = true;
+bool awaitButton = true;
 
-void detect_current_mode() {
+void detectCurrentMode() {
     if (digitalRead(sw2) == HIGH) {
-        current_mode = CALIBRATION;
+        currentMode = CALIBRATION;
     } else {
-        current_mode = WORK;
+        currentMode = WORK;
     }
 }
 
-void detect_current_axis() {
+void detectCurrentAxis() {
     if (digitalRead(sw1_1) == HIGH) {
-        current_axis = X;
+        currentAxis = X;
     } else if (digitalRead(sw1_2) == HIGH) {
-        current_axis = Y;
+        currentAxis = Y;
     } else {
-        current_axis = Z;
+        currentAxis = Z;
     }
 }
 
 void forward() {
-    if (current_axis == X) {
-        if (!stepper_x.tick()) {
-            stepper_x.setSpeed(SPEED_X);
+    if (currentAxis == X) {
+        if (!stepperX.tick()) {
+            stepperX.setSpeed(SPEED_X);
         }
-    } else if (current_axis == Y) {
-        if (!stepper_y.tick()) {
-            stepper_y.setSpeed(SPEED_Y);
+    } else if (currentAxis == Y) {
+        if (!stepperY.tick()) {
+            stepperY.setSpeed(SPEED_Y);
         }
-    } else if (current_axis == Z) {
-        if (!stepper_z.tick()) {
-            stepper_z.setSpeed(SPEED_Z);
+    } else if (currentAxis == Z) {
+        if (!stepperZ.tick()) {
+            stepperZ.setSpeed(SPEED_Z);
         }
     }
 }
 
 void back() {
-    if (current_axis == X) {
-        if (!stepper_x.tick()) {
-            stepper_x.setSpeed(-SPEED_X);
+    if (currentAxis == X) {
+        if (!stepperX.tick()) {
+            stepperX.setSpeed(-SPEED_X);
         }
-    } else if (current_axis == Y) {
-        if (!stepper_y.tick()) {
-            stepper_y.setSpeed(-SPEED_Y);
+    } else if (currentAxis == Y) {
+        if (!stepperY.tick()) {
+            stepperY.setSpeed(-SPEED_Y);
         }
-    } else if (current_axis == Z) {
-        if (!stepper_z.tick()) {
-            stepper_z.setSpeed(-SPEED_Z);
+    } else if (currentAxis == Z) {
+        if (!stepperZ.tick()) {
+            stepperZ.setSpeed(-SPEED_Z);
         }
     }
 }
 
 void stop() {
-    if (current_axis == X) {
-        stepper_x.brake();
-    } else if (current_axis == Y) {
-        stepper_y.brake();
-    } else if (current_axis == Z) {
-        stepper_z.brake();
+    if (currentAxis == X) {
+        stepperX.brake();
+    } else if (currentAxis == Y) {
+        stepperY.brake();
+    } else if (currentAxis == Z) {
+        stepperZ.brake();
     }
 }
 
 void setZero() {
-    if (current_axis == X) {
-        stepper_x.reset();
-    } else if (current_axis == Y) {
-        stepper_y.reset();
-    } else if (current_axis == Z) {
-        stepper_z.reset();
+    if (currentAxis == X) {
+        stepperX.reset();
+    } else if (currentAxis == Y) {
+        stepperY.reset();
+    } else if (currentAxis == Z) {
+        stepperZ.reset();
     }
 }
 
 bool goToZero() {
-    bool x_zero_reached = false;
-    bool y_zero_reached = false;
-    // bool z_zero_reached = false;
-    bool zero_reached = false;
+    bool xZeroReached = false;
+    bool yZeroReached = false;
+    // bool zZeroReached = false;
+    bool zeroReached = false;
 
     // Если одновременно включить 4 движка, то питание проседает,
     // поэтому сначала выгоняю в 0 оси X, Y, а потом Z.
     // Да и поскольку сейчас 0 у Z это нижняя точка, то надо сначала увести стол.
 
     // если голова поднята, то выгоняем оси, иначе сначала поднимаем голову
-    if (head_position == UP) {
-        if (stepper_x.getCurrent() != 0) {
-            if (!stepper_x.tick()) {
-                stepper_x.setTarget(0);
+    if (headPosition == UP) {
+        if (stepperX.getCurrent() != 0) {
+            if (!stepperX.tick()) {
+                stepperX.setTarget(0);
             }
         } else {
-            stepper_x.brake();
-            x_zero_reached = true;
+            stepperX.brake();
+            xZeroReached = true;
         }
 
-        if (stepper_y.getCurrent() != 0) {
-            if (!stepper_y.tick()) {
-                stepper_y.setTarget(0);
+        if (stepperY.getCurrent() != 0) {
+            if (!stepperY.tick()) {
+                stepperY.setTarget(0);
             }
         } else {
-            stepper_y.brake();
-            y_zero_reached = true;
+            stepperY.brake();
+            yZeroReached = true;
         }
     } else {
         moveHead(0);
     }
 
-    if (x_zero_reached && y_zero_reached) {
-        bool head_moved = moveHead(1);
-        if (head_moved) {
-            zero_reached = true;
+    if (xZeroReached && yZeroReached) {
+        bool headMoved = moveHead(1);
+        if (headMoved) {
+            zeroReached = true;
         }
     }
 
-    return zero_reached;
+    return zeroReached;
 }
 
 bool goToPoint(int x, int y) {
-    bool x_reached = false;
-    bool y_reached = false;
-    bool point_reached = false;
+    bool xReached = false;
+    bool yReached = false;
+    bool pointReached = false;
 
-    if (stepper_x.getCurrent() != x) {
-        if (!stepper_x.tick()) {
-            stepper_x.setTarget(x);
+    if (stepperX.getCurrent() != x) {
+        if (!stepperX.tick()) {
+            stepperX.setTarget(x);
         }
     } else {
-        stepper_x.brake();
-        x_reached = true;
+        stepperX.brake();
+        xReached = true;
     }
 
-    if (stepper_y.getCurrent() != y) {
-        if (!stepper_y.tick()) {
-            stepper_y.setTarget(y);
+    if (stepperY.getCurrent() != y) {
+        if (!stepperY.tick()) {
+            stepperY.setTarget(y);
         }
     } else {
-        stepper_y.brake();
-        y_reached = true;
+        stepperY.brake();
+        yReached = true;
     }
 
-    if (x_reached && y_reached) {
-        point_reached = true;
+    if (xReached && yReached) {
+        pointReached = true;
     }
 
-    return point_reached;
+    return pointReached;
 }
 
 bool moveHead(int z) {
-    long up_pos = -500;
-    long down_pos = 0;
-    bool head_moved = false;
+    long upPosition = -500;
+    long downPosition = 0;
+    bool headMoved = false;
 
     if (z == 0) {
-        if (stepper_z.getCurrent() != up_pos) {
-            if (!stepper_z.tick()) {
-                stepper_z.setTarget(up_pos);
+        if (stepperZ.getCurrent() != upPosition) {
+            if (!stepperZ.tick()) {
+                stepperZ.setTarget(upPosition);
             }
         } else {
-            stepper_z.brake();
-            head_moved = true;
-            head_position = UP;
+            stepperZ.brake();
+            headMoved = true;
+            headPosition = UP;
         }
     } else if (z == 1) {
-        if (stepper_z.getCurrent() != down_pos) {
-            if (!stepper_z.tick()) {
-                stepper_z.setTarget(down_pos);
+        if (stepperZ.getCurrent() != downPosition) {
+            if (!stepperZ.tick()) {
+                stepperZ.setTarget(downPosition);
             }
         } else {
-            stepper_z.brake();
-            head_moved = true;
-            head_position = DOWN;
+            stepperZ.brake();
+            headMoved = true;
+            headPosition = DOWN;
         }
     }
 
-    return head_moved;
+    return headMoved;
 }
 
 void setupCalibrationMode() {
-    if (calibration_mode_is_setted) {
+    if (calibrationModeActive) {
         return;
     }
 
-    stepper_x.setRunMode(KEEP_SPEED);
-    stepper_y.setRunMode(KEEP_SPEED);
-    stepper_z.setRunMode(KEEP_SPEED);
+    stepperX.setRunMode(KEEP_SPEED);
+    stepperY.setRunMode(KEEP_SPEED);
+    stepperZ.setRunMode(KEEP_SPEED);
 
-    stepper_x.setAcceleration(0);
-    stepper_y.setAcceleration(0);
-    stepper_z.setAcceleration(0);
+    stepperX.setAcceleration(0);
+    stepperY.setAcceleration(0);
+    stepperZ.setAcceleration(0);
 
-    stepper_x.autoPower(true);
-    stepper_y.autoPower(true);
-    stepper_z.autoPower(true);
+    stepperX.autoPower(true);
+    stepperY.autoPower(true);
+    stepperZ.autoPower(true);
 
-    calibration_mode_is_setted = true;
-    work_mode_is_setted = false;
+    calibrationModeActive = true;
+    workModeActive = false;
 }
 
 void setupWorkMode() {
-    if (work_mode_is_setted) {
+    if (workModeActive) {
         return;
     }
 
-    stepper_x.setRunMode(FOLLOW_POS);
-    stepper_y.setRunMode(FOLLOW_POS);
-    stepper_z.setRunMode(FOLLOW_POS);
+    stepperX.setRunMode(FOLLOW_POS);
+    stepperY.setRunMode(FOLLOW_POS);
+    stepperZ.setRunMode(FOLLOW_POS);
 
-    stepper_x.setMaxSpeed(SPEED_X);
-    stepper_y.setMaxSpeed(SPEED_Y);
-    stepper_z.setMaxSpeed(SPEED_Z);
+    stepperX.setMaxSpeed(SPEED_X);
+    stepperY.setMaxSpeed(SPEED_Y);
+    stepperZ.setMaxSpeed(SPEED_Z);
 
-    stepper_x.setAcceleration(0);
-    stepper_y.setAcceleration(0);
-    stepper_z.setAcceleration(0);
+    stepperX.setAcceleration(0);
+    stepperY.setAcceleration(0);
+    stepperZ.setAcceleration(0);
 
-    stepper_x.autoPower(true);
-    stepper_y.autoPower(true);
-    stepper_z.autoPower(true);        
+    stepperX.autoPower(true);
+    stepperY.autoPower(true);
+    stepperZ.autoPower(true);        
 
-    work_mode_is_setted = true;
-    calibration_mode_is_setted = false;
+    workModeActive = true;
+    calibrationModeActive = false;
 }
 
 void setup() {
@@ -300,17 +300,17 @@ void setup() {
     pinMode(sw2, INPUT);
     pinMode(bt3, INPUT);
 
-    work_state = NONE;
-    head_position = DOWN;
+    workState = NONE;
+    headPosition = DOWN;
     Serial.println("ready");
 }
 
 void loop()	{
-    detect_current_mode();
+    detectCurrentMode();
 
-    if (current_mode == CALIBRATION) {
+    if (currentMode == CALIBRATION) {
         setupCalibrationMode();
-        detect_current_axis();
+        detectCurrentAxis();
 
     	if (digitalRead(bt1) == HIGH) {
             forward();
@@ -324,12 +324,12 @@ void loop()	{
             setZero();
         }
 
-    } else if (current_mode == WORK) {
+    } else if (currentMode == WORK) {
         setupWorkMode();
 
         // кнопка 3 - отвод осей в 0
         if (digitalRead(bt3) == HIGH) {
-            work_state = GOING_TO_ZERO;
+            workState = GOING_TO_ZERO;
         // кнопка 1 - пуск движения по массиву точек
         } else if (digitalRead(bt1) == HIGH) {
             // защита от дребезга контактов
@@ -340,8 +340,8 @@ void loop()	{
                     if (digitalRead(bt1) == LOW) {
                         delay(10);
                         if (digitalRead(bt1) == LOW) {
-                            work_state = GOING_BY_POINTS;
-                            await_button = false;
+                            workState = GOING_BY_POINTS;
+                            awaitButton = false;
                             break;
                         }
                     }
@@ -349,14 +349,14 @@ void loop()	{
             }
         // кнопка 2 - поднять/опустить голову (только если не в работе)
         } else if (digitalRead(bt2) == HIGH) {
-            if (work_state == NONE) {
+            if (workState == NONE) {
                 delay(10);
                 if (digitalRead(bt2) == HIGH) {
                     while (true) {
                         if (digitalRead(bt2) == LOW) {
                             delay(10);
                             if (digitalRead(bt2) == LOW) {
-                                work_state = HEAD_MOVING;
+                                workState = HEAD_MOVING;
                                 break;
                             }
                         }
@@ -365,55 +365,55 @@ void loop()	{
             }
         }
 
-        if (work_state == GOING_TO_ZERO) {
-            bool zero_reached = goToZero();
+        if (workState == GOING_TO_ZERO) {
+            bool zeroReached = goToZero();
             
-            if (zero_reached) {
-                work_state = NONE;
+            if (zeroReached) {
+                workState = NONE;
             }
-        } else if (work_state == GOING_BY_POINTS) {
+        } else if (workState == GOING_BY_POINTS) {
             // если не ждем нажатия кнопки, то работаем
-            if (!await_button) {
-                int z = POINTS[current_point][0];
-                bool head_moved = moveHead(z);
+            if (!awaitButton) {
+                int z = POINTS[currentPoint][0];
+                bool headMoved = moveHead(z);
 
-                if (head_moved) {
-                    int x = POINTS[current_point][1];
-                    int y = POINTS[current_point][2];
-                    bool point_reached = goToPoint(x, y);
+                if (headMoved) {
+                    int x = POINTS[currentPoint][1];
+                    int y = POINTS[currentPoint][2];
+                    bool pointReached = goToPoint(x, y);
 
-                    if (point_reached) {
+                    if (pointReached) {
                         Serial.print(x);
                         Serial.print(" ");
                         Serial.print(y);
                         Serial.println(" point reached");
 
-                        current_point++;
-                        if (current_point == POINTS_SIZE) {
+                        currentPoint++;
+                        if (currentPoint == POINTS_SIZE) {
                             Serial.println("End of POINTS array");
                             Serial.println("Going to zero");
-                            current_point = 0;
-                            work_state = GOING_TO_ZERO;
+                            currentPoint = 0;
+                            workState = GOING_TO_ZERO;
                         }
 
                         // если включен режим "шаг по нажатию кнопки", то сбрасываем флаг ожидания
                         if (NEXT_STEP_FROM_BUTTON) {
-                            await_button = true;
+                            awaitButton = true;
                         }
                     }
                 }
             }
-        } else if (work_state == HEAD_MOVING) {
-            bool head_moved = false;
+        } else if (workState == HEAD_MOVING) {
+            bool headMoved = false;
 
-            if (head_position == DOWN) {
-                head_moved = moveHead(0);
-            } else if (head_position == UP) {
-                head_moved = moveHead(1);
+            if (headPosition == DOWN) {
+                headMoved = moveHead(0);
+            } else if (headPosition == UP) {
+                headMoved = moveHead(1);
             }
 
-            if (head_moved) {
-                work_state = NONE;
+            if (headMoved) {
+                workState = NONE;
             }
         }
     }
