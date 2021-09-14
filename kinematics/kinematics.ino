@@ -121,11 +121,17 @@ void back() {
 }
 
 void stop() {
-    if (currentAxis == X) {
+    if (currentMode == CALIBRATION) {
+        if (currentAxis == X) {
+            stepperX.brake();
+        } else if (currentAxis == Y) {
+            stepperY.brake();
+        } else if (currentAxis == Z) {
+            stepperZ.brake();
+        }
+    } else if (currentMode == WORK) {
         stepperX.brake();
-    } else if (currentAxis == Y) {
         stepperY.brake();
-    } else if (currentAxis == Z) {
         stepperZ.brake();
     }
 }
@@ -327,31 +333,14 @@ void loop()	{
     } else if (currentMode == WORK) {
         setupWorkMode();
 
-        // кнопка 3 - отвод осей в 0
-        if (digitalRead(bt3) == HIGH) {
-            workState = GOING_TO_ZERO;
-        // кнопка 1 - пуск движения по массиву точек
-        } else if (digitalRead(bt1) == HIGH) {
-            // защита от дребезга контактов
-            delay(10);
-            if (digitalRead(bt1) == HIGH) {
-                // ждем когда кнопка будет отжата
-                while (true) {
-                    if (digitalRead(bt1) == LOW) {
-                        delay(10);
-                        if (digitalRead(bt1) == LOW) {
-                            workState = GOING_BY_POINTS;
-                            awaitButton = false;
-                            break;
-                        }
-                    }
-                }
-            }
-        // кнопка 2 - поднять/опустить голову (только если не в работе)
-        } else if (digitalRead(bt2) == HIGH) {
+        // кнопка 2
+        if (digitalRead(bt2) == HIGH) {
+            // в режиме простоя - поднять/опустить голову
             if (workState == NONE) {
+                // защита от дребезга контактов
                 delay(10);
                 if (digitalRead(bt2) == HIGH) {
+                    // ждем когда кнопка будет отжата
                     while (true) {
                         if (digitalRead(bt2) == LOW) {
                             delay(10);
@@ -362,6 +351,36 @@ void loop()	{
                         }
                     }
                 }
+            // в остальных режимах - полная остановка
+            } else {
+                stop();
+                currentPoint = 0;
+                awaitButton = true;
+                workState = NONE;
+                delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
+            }
+        // кнопка 1 - пуск движения по массиву точек
+        } else if (digitalRead(bt1) == HIGH) {
+            if (awaitButton) {
+                delay(10);
+                if (digitalRead(bt1) == HIGH) {
+                    while (true) {
+                        if (digitalRead(bt1) == LOW) {
+                            delay(10);
+                            if (digitalRead(bt1) == LOW) {
+                                workState = GOING_BY_POINTS;
+                                awaitButton = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        // кнопка 3
+        } else if (digitalRead(bt3) == HIGH) {
+            // в режиме простоя - отвод осей в 0
+            if (workState == NONE) {
+                workState = GOING_TO_ZERO;
             }
         }
 
@@ -390,10 +409,11 @@ void loop()	{
 
                         currentPoint++;
                         if (currentPoint == POINTS_SIZE) {
+                            currentPoint = 0;
+                            awaitButton = true;
+                            workState = GOING_TO_ZERO;
                             Serial.println("End of POINTS array");
                             Serial.println("Going to zero");
-                            currentPoint = 0;
-                            workState = GOING_TO_ZERO;
                         }
 
                         // если включен режим "шаг по нажатию кнопки", то сбрасываем флаг ожидания
