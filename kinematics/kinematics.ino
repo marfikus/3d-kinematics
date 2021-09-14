@@ -34,9 +34,9 @@ enum {
     DOWN
 } head_position;
 
-float speed_x = 400; // для одного движка, больше 540 уже клинит иногда
-float speed_y = 400; // для одного движка, больше 540 уже клинит иногда
-float speed_z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
+const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
+const float SPEED_Y = 400; // для одного движка, больше 540 уже клинит иногда
+const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
 
 bool calibration_mode_is_setted = false;
 bool work_mode_is_setted = false;
@@ -47,7 +47,7 @@ bool work_mode_is_setted = false;
 // третий элемент - координата у
 
 // прямоугольник
-int points[][3] = {
+const int POINTS[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
@@ -56,16 +56,19 @@ int points[][3] = {
 };
 
 //прямоугольный треугольник
-/*int points[][3] = {
+/*int POINTS[][3] = {
     {0, 1700, 600},
     {1, 1700, 3600},
     {1, 4700, 600},
     {1, 1700, 600},
 };*/
 
-int points_size = sizeof(points) / sizeof(points[0]);
-int point_counter = 0;
-bool await_start_from_button = true;
+const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+int current_point = 0;
+
+// активация режима выполнения каждого шага по нажатию кнопки
+const bool NEXT_STEP_FROM_BUTTON = false;
+bool await_button = true;
 
 void detect_current_mode() {
     if (digitalRead(sw2) == HIGH) {
@@ -88,15 +91,15 @@ void detect_current_axis() {
 void forward() {
     if (current_axis == X) {
         if (!stepper_x.tick()) {
-            stepper_x.setSpeed(speed_x);
+            stepper_x.setSpeed(SPEED_X);
         }
     } else if (current_axis == Y) {
         if (!stepper_y.tick()) {
-            stepper_y.setSpeed(speed_y);
+            stepper_y.setSpeed(SPEED_Y);
         }
     } else if (current_axis == Z) {
         if (!stepper_z.tick()) {
-            stepper_z.setSpeed(speed_z);
+            stepper_z.setSpeed(SPEED_Z);
         }
     }
 }
@@ -104,15 +107,15 @@ void forward() {
 void back() {
     if (current_axis == X) {
         if (!stepper_x.tick()) {
-            stepper_x.setSpeed(-speed_x);
+            stepper_x.setSpeed(-SPEED_X);
         }
     } else if (current_axis == Y) {
         if (!stepper_y.tick()) {
-            stepper_y.setSpeed(-speed_y);
+            stepper_y.setSpeed(-SPEED_Y);
         }
     } else if (current_axis == Z) {
         if (!stepper_z.tick()) {
-            stepper_z.setSpeed(-speed_z);
+            stepper_z.setSpeed(-SPEED_Z);
         }
     }
 }
@@ -270,9 +273,9 @@ void setupWorkMode() {
     stepper_y.setRunMode(FOLLOW_POS);
     stepper_z.setRunMode(FOLLOW_POS);
 
-    stepper_x.setMaxSpeed(speed_x);
-    stepper_y.setMaxSpeed(speed_y);
-    stepper_z.setMaxSpeed(speed_z);
+    stepper_x.setMaxSpeed(SPEED_X);
+    stepper_y.setMaxSpeed(SPEED_Y);
+    stepper_z.setMaxSpeed(SPEED_Z);
 
     stepper_x.setAcceleration(0);
     stepper_y.setAcceleration(0);
@@ -338,7 +341,7 @@ void loop()	{
                         delay(10);
                         if (digitalRead(bt1) == LOW) {
                             work_state = GOING_BY_POINTS;
-                            await_start_from_button = false;
+                            await_button = false;
                             break;
                         }
                     }
@@ -347,7 +350,6 @@ void loop()	{
         // кнопка 2 - поднять/опустить голову (только если не в работе)
         } else if (digitalRead(bt2) == HIGH) {
             if (work_state == NONE) {
-                // защита от дребезга контактов
                 delay(10);
                 if (digitalRead(bt2) == HIGH) {
                     while (true) {
@@ -370,43 +372,46 @@ void loop()	{
                 work_state = NONE;
             }
         } else if (work_state == GOING_BY_POINTS) {
-
-            // выполнение каждого шага по нажатию кнопки
-            // if (!await_start_from_button) {
-
-                int z = points[point_counter][0];
+            // если не ждем нажатия кнопки, то работаем
+            if (!await_button) {
+                int z = POINTS[current_point][0];
                 bool head_moved = moveHead(z);
 
                 if (head_moved) {
-                    int x = points[point_counter][1];
-                    int y = points[point_counter][2];
+                    int x = POINTS[current_point][1];
+                    int y = POINTS[current_point][2];
                     bool point_reached = goToPoint(x, y);
 
                     if (point_reached) {
-                        // delay(1000);
                         Serial.print(x);
                         Serial.print(" ");
                         Serial.print(y);
                         Serial.println(" point reached");
 
-                        point_counter++;
-                        if (point_counter == points_size) {
-                            Serial.println("End of points array");
+                        current_point++;
+                        if (current_point == POINTS_SIZE) {
+                            Serial.println("End of POINTS array");
                             Serial.println("Going to zero");
-                            point_counter = 0;
+                            current_point = 0;
                             work_state = GOING_TO_ZERO;
                         }
-                        await_start_from_button = true;
+
+                        // если включен режим "шаг по нажатию кнопки", то сбрасываем флаг ожидания
+                        if (NEXT_STEP_FROM_BUTTON) {
+                            await_button = true;
+                        }
                     }
                 }
-            // }
+            }
         } else if (work_state == HEAD_MOVING) {
             bool head_moved = false;
+
             if (head_position == DOWN) {
                 head_moved = moveHead(0);
             } else if (head_position == UP) {
                 head_moved = moveHead(1);
             }
+
             if (head_moved) {
                 work_state = NONE;
             }
