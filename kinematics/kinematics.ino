@@ -4,12 +4,46 @@ GStepper<STEPPER4WIRE> stepperX(2048, 13, 11, 12, 10);
 GStepper<STEPPER4WIRE> stepperY(2048, 9, 7, 8, 6);
 GStepper<STEPPER4WIRE> stepperZ(2048, 5, 3, 4, 2);
 
-byte bt1 = A0;
-byte bt2 = A1;
-byte sw1_1 = A2;
-byte sw1_2 = A3;
-byte sw2 = A4;
-byte bt3 = A5;
+const byte BT_1 = A0;
+const byte BT_2 = A1;
+const byte SW_1_1 = A2;
+const byte SW_1_2 = A3;
+const byte SW_2 = A4;
+const byte BT_3 = A5;
+
+const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
+const float SPEED_Y = 400;
+const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
+
+// активация режима движения к каждой точке массива по нажатию кнопки
+const bool NEXT_POINT_FROM_BUTTON = false;
+bool awaitButton = true; // этот флаг менять не надо!
+
+// массив точек:
+// первый элемент - положение головки(0 - поднята, 1 - опущена)
+// второй элемент - координата х
+// третий элемент - координата у
+
+// прямоугольник:
+const int POINTS[][3] = {
+    {0, 3000, 1000},
+    {1, 3000, 2000},
+    {1, 4000, 2000},
+    {1, 4000, 1000},
+    {1, 2900, 1000}
+};
+
+//прямоугольный треугольник:
+/*int POINTS[][3] = {
+    {0, 1700, 600},
+    {1, 1700, 3600},
+    {1, 4700, 600},
+    {1, 1700, 600},
+};*/
+
+// вычисление количества элементов в массиве
+const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+int currentPoint = 0;
 
 enum {
     X,
@@ -34,44 +68,11 @@ enum {
     DOWN
 } headPosition;
 
-const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
-const float SPEED_Y = 400; // для одного движка, больше 540 уже клинит иногда
-const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
-
 bool calibrationModeActive = false;
 bool workModeActive = false;
 
-// массив точек:
-// первый элемент - положение головки(0 - поднята, 1 - опущена)
-// второй элемент - координата х
-// третий элемент - координата у
-
-// прямоугольник
-const int POINTS[][3] = {
-    {0, 3000, 1000},
-    {1, 3000, 2000},
-    {1, 4000, 2000},
-    {1, 4000, 1000},
-    {1, 2900, 1000}
-};
-
-//прямоугольный треугольник
-/*int POINTS[][3] = {
-    {0, 1700, 600},
-    {1, 1700, 3600},
-    {1, 4700, 600},
-    {1, 1700, 600},
-};*/
-
-const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
-int currentPoint = 0;
-
-// активация режима выполнения каждого шага по нажатию кнопки
-const bool NEXT_STEP_FROM_BUTTON = false;
-bool awaitButton = true;
-
 void detectCurrentMode() {
-    if (digitalRead(sw2) == HIGH) {
+    if (digitalRead(SW_2) == HIGH) {
         currentMode = CALIBRATION;
     } else {
         currentMode = WORK;
@@ -79,9 +80,9 @@ void detectCurrentMode() {
 }
 
 void detectCurrentAxis() {
-    if (digitalRead(sw1_1) == HIGH) {
+    if (digitalRead(SW_1_1) == HIGH) {
         currentAxis = X;
-    } else if (digitalRead(sw1_2) == HIGH) {
+    } else if (digitalRead(SW_1_2) == HIGH) {
         currentAxis = Y;
     } else {
         currentAxis = Z;
@@ -299,12 +300,12 @@ void setup() {
     // setupWorkMode();
     Serial.begin(9600);
 	
-	pinMode(bt1, INPUT);
-	pinMode(bt2, INPUT);
-    pinMode(sw1_1, INPUT);
-    pinMode(sw1_2, INPUT);
-    pinMode(sw2, INPUT);
-    pinMode(bt3, INPUT);
+	pinMode(BT_1, INPUT);
+	pinMode(BT_2, INPUT);
+    pinMode(SW_1_1, INPUT);
+    pinMode(SW_1_2, INPUT);
+    pinMode(SW_2, INPUT);
+    pinMode(BT_3, INPUT);
 
     workState = NONE;
     headPosition = DOWN;
@@ -318,15 +319,15 @@ void loop()	{
         setupCalibrationMode();
         detectCurrentAxis();
 
-    	if (digitalRead(bt1) == HIGH) {
+    	if (digitalRead(BT_1) == HIGH) {
             forward();
-    	} else if (digitalRead(bt2) == HIGH) {
+    	} else if (digitalRead(BT_2) == HIGH) {
             back();
     	} else {
             stop();
     	}
 
-        if (digitalRead(bt3) == HIGH) {
+        if (digitalRead(BT_3) == HIGH) {
             setZero();
         }
 
@@ -334,17 +335,17 @@ void loop()	{
         setupWorkMode();
 
         // кнопка 2
-        if (digitalRead(bt2) == HIGH) {
+        if (digitalRead(BT_2) == HIGH) {
             // в режиме простоя - поднять/опустить голову
             if (workState == NONE) {
                 // защита от дребезга контактов
                 delay(10);
-                if (digitalRead(bt2) == HIGH) {
+                if (digitalRead(BT_2) == HIGH) {
                     // ждем когда кнопка будет отжата
                     while (true) {
-                        if (digitalRead(bt2) == LOW) {
+                        if (digitalRead(BT_2) == LOW) {
                             delay(10);
-                            if (digitalRead(bt2) == LOW) {
+                            if (digitalRead(BT_2) == LOW) {
                                 workState = HEAD_MOVING;
                                 break;
                             }
@@ -360,14 +361,14 @@ void loop()	{
                 delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
             }
         // кнопка 1 - пуск движения по массиву точек
-        } else if (digitalRead(bt1) == HIGH) {
+        } else if (digitalRead(BT_1) == HIGH) {
             if (awaitButton) {
                 delay(10);
-                if (digitalRead(bt1) == HIGH) {
+                if (digitalRead(BT_1) == HIGH) {
                     while (true) {
-                        if (digitalRead(bt1) == LOW) {
+                        if (digitalRead(BT_1) == LOW) {
                             delay(10);
-                            if (digitalRead(bt1) == LOW) {
+                            if (digitalRead(BT_1) == LOW) {
                                 workState = GOING_BY_POINTS;
                                 awaitButton = false;
                                 break;
@@ -377,7 +378,7 @@ void loop()	{
                 }
             }
         // кнопка 3
-        } else if (digitalRead(bt3) == HIGH) {
+        } else if (digitalRead(BT_3) == HIGH) {
             // в режиме простоя - отвод осей в 0
             if (workState == NONE) {
                 workState = GOING_TO_ZERO;
@@ -416,8 +417,8 @@ void loop()	{
                             Serial.println("Going to zero");
                         }
 
-                        // если включен режим "шаг по нажатию кнопки", то сбрасываем флаг ожидания
-                        if (NEXT_STEP_FROM_BUTTON) {
+                        // если включен режим движения по нажатию кнопки, то сбрасываем флаг ожидания
+                        if (NEXT_POINT_FROM_BUTTON) {
                             awaitButton = true;
                         }
                     }
