@@ -25,7 +25,8 @@ enum {
 enum {
     NONE,
     GOING_TO_ZERO,
-    GOING_BY_POINTS
+    GOING_BY_POINTS,
+    HEAD_MOVING
 } work_state;
 
 enum {
@@ -40,26 +41,27 @@ float speed_z = 300; // для двух движков в параллель, б
 bool calibration_mode_is_setted = false;
 bool work_mode_is_setted = false;
 
+// массив точек:
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
 // второй элемент - координата х
 // третий элемент - координата у
 
 // прямоугольник
-/*int points[][3] = {
+int points[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
-    {1, 3000, 1000}
-};*/
+    {1, 2900, 1000}
+};
 
 //прямоугольный треугольник
-int points[][3] = {
+/*int points[][3] = {
     {0, 1700, 600},
     {1, 1700, 3600},
     {1, 4700, 600},
     {1, 1700, 600},
-};
+};*/
 
 int points_size = sizeof(points) / sizeof(points[0]);
 int point_counter = 0;
@@ -295,6 +297,8 @@ void setup() {
     pinMode(sw2, INPUT);
     pinMode(bt3, INPUT);
 
+    work_state = NONE;
+    head_position = DOWN;
     Serial.println("ready");
 }
 
@@ -320,12 +324,15 @@ void loop()	{
     } else if (current_mode == WORK) {
         setupWorkMode();
 
+        // кнопка 3 - отвод осей в 0
         if (digitalRead(bt3) == HIGH) {
             work_state = GOING_TO_ZERO;
+        // кнопка 1 - пуск движения по массиву точек
         } else if (digitalRead(bt1) == HIGH) {
             // защита от дребезга контактов
             delay(10);
             if (digitalRead(bt1) == HIGH) {
+                // ждем когда кнопка будет отжата
                 while (true) {
                     if (digitalRead(bt1) == LOW) {
                         delay(10);
@@ -333,6 +340,23 @@ void loop()	{
                             work_state = GOING_BY_POINTS;
                             await_start_from_button = false;
                             break;
+                        }
+                    }
+                }
+            }
+        // кнопка 2 - поднять/опустить голову (только если не в работе)
+        } else if (digitalRead(bt2) == HIGH) {
+            if (work_state == NONE) {
+                // защита от дребезга контактов
+                delay(10);
+                if (digitalRead(bt2) == HIGH) {
+                    while (true) {
+                        if (digitalRead(bt2) == LOW) {
+                            delay(10);
+                            if (digitalRead(bt2) == LOW) {
+                                work_state = HEAD_MOVING;
+                                break;
+                            }
                         }
                     }
                 }
@@ -376,6 +400,16 @@ void loop()	{
                     }
                 }
             // }
+        } else if (work_state == HEAD_MOVING) {
+            bool head_moved = false;
+            if (head_position == DOWN) {
+                head_moved = moveHead(0);
+            } else if (head_position == UP) {
+                head_moved = moveHead(1);
+            }
+            if (head_moved) {
+                work_state = NONE;
+            }
         }
     }
 
