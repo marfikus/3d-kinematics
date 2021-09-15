@@ -17,7 +17,15 @@ const float SPEED_Z = 300; // для двух движков в параллел
 
 // активация режима движения к каждой точке массива по нажатию кнопки
 const bool NEXT_POINT_FROM_BUTTON = false;
-bool awaitButton = true; // этот флаг менять не надо!
+
+// активация коррекции погрешности механики (внесение поправки в координаты)
+const bool CORRECTION_ENABLED = true;
+const int X_CORRECTION = 50;
+const int Y_CORRECTION = 0;
+const int SHIFT = 500;
+
+const int UP_POSITION = -500;
+const int DOWN_POSITION = 0;
 
 // массив точек:
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
@@ -30,7 +38,7 @@ const int POINTS[][3] = {
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
-    {1, 2900, 1000}
+    {1, 3000, 1000}
 };
 
 //прямоугольный треугольник:
@@ -57,10 +65,11 @@ enum {
 } currentMode;
 
 enum {
-    NONE,
+    AWAIT_COMMAND,
     GOING_TO_ZERO,
     GOING_BY_POINTS,
-    HEAD_MOVING
+    HEAD_MOVING,
+    LAST_DIRECTIONS_DETECTING
 } workState;
 
 enum {
@@ -68,8 +77,31 @@ enum {
     DOWN
 } headPosition;
 
+enum Directions {
+    RIGHT,
+    LEFT
+};
+Directions xLastDirection;
+Directions yLastDirection;
+Directions xNeedDirection;
+Directions yNeedDirection;
+
+enum {
+    START,
+    ZERO_REACHED,
+    SHIFT_REACHED
+} detectLastDirectionsState;
+
+bool lastDirectionsDetected = false;
+bool correctedValues = false;
+int correctedX = 0;
+int correctedY = 0;
+int xCorrection = 0;
+int yCorrection = 0;
+
 bool calibrationModeActive = false;
 bool workModeActive = false;
+bool awaitButton = true;
 
 void detectCurrentMode() {
     if (digitalRead(SW_2) == HIGH) {
@@ -147,7 +179,7 @@ void setZero() {
     }
 }
 
-bool goToZero() {
+bool goToZero(bool moveHeadDown) {
     bool xZeroReached = false;
     bool yZeroReached = false;
     // bool zZeroReached = false;
@@ -181,13 +213,23 @@ bool goToZero() {
     }
 
     if (xZeroReached && yZeroReached) {
-        bool headMoved = moveHead(1);
-        if (headMoved) {
+        // если нужно опускаем голову
+        if (moveHeadDown) {
+            bool headMoved = moveHead(1);
+            if (headMoved) {
+                zeroReached = true;
+            }
+        } else {
             zeroReached = true;
         }
     }
 
     return zeroReached;
+}
+
+// перегрузка функции, чтобы можно было вызвать без параметров
+bool goToZero() {
+    return goToZero(true);
 }
 
 bool goToPoint(int x, int y) {
@@ -221,14 +263,12 @@ bool goToPoint(int x, int y) {
 }
 
 bool moveHead(int z) {
-    long upPosition = -500;
-    long downPosition = 0;
     bool headMoved = false;
 
     if (z == 0) {
-        if (stepperZ.getCurrent() != upPosition) {
+        if (stepperZ.getCurrent() != UP_POSITION) {
             if (!stepperZ.tick()) {
-                stepperZ.setTarget(upPosition);
+                stepperZ.setTarget(UP_POSITION);
             }
         } else {
             stepperZ.brake();
@@ -236,9 +276,9 @@ bool moveHead(int z) {
             headPosition = UP;
         }
     } else if (z == 1) {
-        if (stepperZ.getCurrent() != downPosition) {
+        if (stepperZ.getCurrent() != DOWN_POSITION) {
             if (!stepperZ.tick()) {
-                stepperZ.setTarget(downPosition);
+                stepperZ.setTarget(DOWN_POSITION);
             }
         } else {
             stepperZ.brake();
@@ -248,6 +288,87 @@ bool moveHead(int z) {
     }
 
     return headMoved;
+}
+
+void detectLastDirections() {
+    bool result = false;
+    // Алгоритм такой: 
+    //  поднимаем голову, выгоняем оси в 0 
+    //  и делаем небольшой сдвиг туда-обратно
+
+    if (detectLastDirectionsState == START) {
+        bool zeroReached = goToZero(false); // гоним в 0 без опускания головы
+        if (zeroReached) {
+            detectLastDirectionsState = ZERO_REACHED;
+        }
+    } else if (detectLastDirectionsState == ZERO_REACHED) {
+        bool shiftReached = goToPoint(SHIFT, SHIFT);
+        if (shiftReached) {
+            detectLastDirectionsState = SHIFT_REACHED;
+        }
+    } else if (detectLastDirectionsState == SHIFT_REACHED) {
+        bool zeroReached = goToZero(false);
+        if (zeroReached) {
+            detectLastDirectionsState = START;
+            xLastDirection = LEFT;
+            yLastDirection = LEFT;
+            result = true;
+        }        
+    }
+
+    lastDirectionsDetected = result;
+}
+
+void updateLastDirections() {
+    xLastDirection = xNeedDirection;
+    yLastDirection = yNeedDirection;
+}
+
+int correctValue(char axis, int newValue) {
+    int correctedNewValue = newValue;
+
+    if (axis == 'x') {
+        int currentValue = stepperX.getCurrent() + xCorrection;
+        if (newValue > currentValue) {
+            xNeedDirection = RIGHT;
+        } else if (newValue < currentValue) {
+            xNeedDirection = LEFT;
+        } else {
+            xNeedDirection = xLastDirection;
+        }
+
+        if (xNeedDirection != xLastDirection) {
+            if (xNeedDirection == RIGHT) {
+                correctedNewValue = newValue + X_CORRECTION;
+                xCorrection = -X_CORRECTION;
+            } else if (xNeedDirection == LEFT) {
+                correctedNewValue = newValue - X_CORRECTION;
+                xCorrection = X_CORRECTION;
+            }
+        }
+
+    } else if (axis == 'y') {
+        int currentValue = stepperY.getCurrent() + yCorrection;
+        if (newValue > currentValue) {
+            yNeedDirection = RIGHT;
+        } else if (newValue < currentValue) {
+            yNeedDirection = LEFT;
+        } else {
+            yNeedDirection = yLastDirection;
+        }
+
+        if (yNeedDirection != yLastDirection) {
+            if (yNeedDirection == RIGHT) {
+                correctedNewValue = newValue + Y_CORRECTION;
+                yCorrection = -Y_CORRECTION;
+            } else if (yNeedDirection == LEFT) {
+                correctedNewValue = newValue - Y_CORRECTION;
+                yCorrection = Y_CORRECTION;
+            }
+        }
+    }
+
+    return correctedNewValue;
 }
 
 void setupCalibrationMode() {
@@ -294,6 +415,8 @@ void setupWorkMode() {
 
     workModeActive = true;
     calibrationModeActive = false;
+
+    lastDirectionsDetected = false;
 }
 
 void setup() {
@@ -307,8 +430,9 @@ void setup() {
     pinMode(SW_2, INPUT);
     pinMode(BT_3, INPUT);
 
-    workState = NONE;
+    workState = AWAIT_COMMAND;
     headPosition = DOWN;
+    detectLastDirectionsState = START;
     Serial.println("ready");
 }
 
@@ -337,7 +461,7 @@ void loop()	{
         // кнопка 2
         if (digitalRead(BT_2) == HIGH) {
             // в режиме простоя - поднять/опустить голову
-            if (workState == NONE) {
+            if (workState == AWAIT_COMMAND) {
                 // защита от дребезга контактов
                 delay(10);
                 if (digitalRead(BT_2) == HIGH) {
@@ -356,8 +480,12 @@ void loop()	{
             } else {
                 stop();
                 currentPoint = 0;
+                correctedValues = false;
+                xCorrection = 0;
+                yCorrection = 0;
                 awaitButton = true;
-                workState = NONE;
+                lastDirectionsDetected = false;
+                workState = AWAIT_COMMAND;
                 delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
             }
         // кнопка 1 - пуск движения по массиву точек
@@ -369,7 +497,16 @@ void loop()	{
                         if (digitalRead(BT_1) == LOW) {
                             delay(10);
                             if (digitalRead(BT_1) == LOW) {
-                                workState = GOING_BY_POINTS;
+                                if (CORRECTION_ENABLED) {
+                                    if (!lastDirectionsDetected) {
+                                        workState = LAST_DIRECTIONS_DETECTING;
+                                        detectLastDirectionsState = START;
+                                    } else {
+                                        workState = GOING_BY_POINTS;
+                                    }
+                                } else {
+                                    workState = GOING_BY_POINTS;
+                                }
                                 awaitButton = false;
                                 break;
                             }
@@ -380,7 +517,7 @@ void loop()	{
         // кнопка 3
         } else if (digitalRead(BT_3) == HIGH) {
             // в режиме простоя - отвод осей в 0
-            if (workState == NONE) {
+            if (workState == AWAIT_COMMAND) {
                 workState = GOING_TO_ZERO;
             }
         }
@@ -389,8 +526,18 @@ void loop()	{
             bool zeroReached = goToZero();
             
             if (zeroReached) {
-                workState = NONE;
+                workState = AWAIT_COMMAND;
             }
+
+        } else if (workState == LAST_DIRECTIONS_DETECTING) {
+            detectLastDirections();
+            if (lastDirectionsDetected) {
+                workState = GOING_BY_POINTS;
+                correctedValues = false;
+                xCorrection = 0;
+                yCorrection = 0;
+            }
+
         } else if (workState == GOING_BY_POINTS) {
             // если не ждем нажатия кнопки, то работаем
             if (!awaitButton) {
@@ -400,6 +547,18 @@ void loop()	{
                 if (headMoved) {
                     int x = POINTS[currentPoint][1];
                     int y = POINTS[currentPoint][2];
+
+                    if (CORRECTION_ENABLED) {
+                        if (!correctedValues) {
+                            correctedX = correctValue('x', x);
+                            correctedY = correctValue('y', y);
+                            correctedValues = true;
+                        }
+                        x = correctedX;
+                        y = correctedY;
+                    }
+                    // Serial.print("corrected x: ");
+                    // Serial.println(x);
                     bool pointReached = goToPoint(x, y);
 
                     if (pointReached) {
@@ -413,6 +572,7 @@ void loop()	{
                             currentPoint = 0;
                             awaitButton = true;
                             workState = GOING_TO_ZERO;
+                            lastDirectionsDetected = false;
                             Serial.println("End of POINTS array");
                             Serial.println("Going to zero");
                         }
@@ -420,6 +580,10 @@ void loop()	{
                         // если включен режим движения по нажатию кнопки, то сбрасываем флаг ожидания
                         if (NEXT_POINT_FROM_BUTTON) {
                             awaitButton = true;
+                        }
+                        if (CORRECTION_ENABLED) {
+                            updateLastDirections();
+                            correctedValues = false;
                         }
                     }
                 }
@@ -434,7 +598,7 @@ void loop()	{
             }
 
             if (headMoved) {
-                workState = NONE;
+                workState = AWAIT_COMMAND;
             }
         }
     }
