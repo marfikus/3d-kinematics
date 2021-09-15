@@ -14,6 +14,10 @@ const byte SW_1_2 = A3;
 const byte SW_2 = A4; 
 const byte BT_3 = A5; // кнопка без фиксации
 
+// активация serial
+const bool SERIAL_ENABLED = true;
+const long SERIAL_SPEED = 9600;
+
 // скорости движения осей
 const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
 const float SPEED_Y = 400;
@@ -421,8 +425,6 @@ void setupWorkMode() {
 }
 
 void setup() {
-    Serial.begin(9600);
-	
 	pinMode(BT_1, INPUT);
 	pinMode(BT_2, INPUT);
     pinMode(SW_1_1, INPUT);
@@ -432,7 +434,11 @@ void setup() {
 
     workState = AWAIT_COMMAND;
     headPosition = DOWN;
-    Serial.println("ready");
+
+    if (SERIAL_ENABLED) {
+        Serial.begin(SERIAL_SPEED);
+        Serial.println("ready");
+    }
 }
 
 void loop()	{
