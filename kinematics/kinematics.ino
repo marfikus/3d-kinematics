@@ -24,7 +24,7 @@ const float SPEED_Y = 400;
 const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
 
 // активация коррекции погрешности механики (внесение поправки в координаты)
-const bool CORRECTION_ENABLED = true;
+const bool CORRECTION_ENABLED = false;
 // величины корректировок
 const int X_CORRECTION = 50;
 const int Y_CORRECTION = 0;
@@ -61,7 +61,7 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 };*/
 
 // восьмиугольник:
-const int POINTS[][3] = {
+/*const int POINTS[][3] = {
     {0, 2000, 1000},
     {1, 3000, 1000},
     {1, 4000, 2000},
@@ -71,11 +71,22 @@ const int POINTS[][3] = {
     {1, 1000, 3000},
     {1, 1000, 2000},
     {1, 2000, 1000},
-};
+};*/
 
 // вычисление количества элементов в массиве
-const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+// const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 int currentPoint = 0;
+
+// круг (массив заполняется при запуске в generateCirclePointsArray)
+// центр и радиус
+const int X0 = 3000;
+const int Y0 = 3000;
+const int RADIUS = 1000;
+// шаг координат
+const int STEP = 100;
+
+const int POINTS_SIZE = (RADIUS / STEP) * 4;
+int POINTS[POINTS_SIZE][3];
 
 enum {
     X,
@@ -126,6 +137,57 @@ int yCorrection = 0;
 bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
+
+void generateCirclePointsArray(int x0, int y0, int r, int step) {
+    int xMin = x0 - r;
+    int xMax = x0 + r;
+    int yMin = y0 - r;
+    int yMax = y0 + r;
+
+    // int pointsSize = (r / step) * 4;
+    // Serial.println(pointsSize);
+    // int POINTS[pointsSize][3];
+
+    int currentPos = 0;
+    for (int x = xMin, y = y0; x < x0; x += step, y -= step) {
+        POINTS[currentPos][0] = 1;
+        POINTS[currentPos][1] = x;
+        POINTS[currentPos][2] = y;
+        currentPos++;
+    }
+    // Serial.println(currentPos);
+    for (int x = x0, y = yMin; x < xMax; x += step, y += step) {
+        POINTS[currentPos][0] = 1;
+        POINTS[currentPos][1] = x;
+        POINTS[currentPos][2] = y;
+        currentPos++;
+    }
+    // Serial.println(currentPos);
+    for (int x = xMax, y = y0; x > x0; x -= step, y += step) {
+        POINTS[currentPos][0] = 1;
+        POINTS[currentPos][1] = x;
+        POINTS[currentPos][2] = y;
+        currentPos++;
+    }
+    // Serial.println(currentPos);
+    for (int x = x0, y = yMax; x > xMin; x -= step, y -= step) {
+        POINTS[currentPos][0] = 1;
+        POINTS[currentPos][1] = x;
+        POINTS[currentPos][2] = y;
+        currentPos++;
+    }
+    // Serial.println(currentPos);
+
+    POINTS[0][0] = 0;
+
+/*    for (int i = 0; i < pointsSize; i++) {
+        Serial.print(POINTS[i][0]);
+        Serial.print(" ");
+        Serial.print(POINTS[i][1]);
+        Serial.print(" ");
+        Serial.println(POINTS[i][2]);
+    }*/
+}
 
 void detectCurrentMode() {
     if (digitalRead(SW_2) == HIGH) {
@@ -451,6 +513,14 @@ void setup() {
     if (SERIAL_ENABLED) {
         Serial.begin(SERIAL_SPEED);
         Serial.println("ready");
+    }
+    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
+    for (int i = 0; i < POINTS_SIZE; i++) {
+        Serial.print(POINTS[i][0]);
+        Serial.print(" ");
+        Serial.print(POINTS[i][1]);
+        Serial.print(" ");
+        Serial.println(POINTS[i][2]);
     }
 }
 
