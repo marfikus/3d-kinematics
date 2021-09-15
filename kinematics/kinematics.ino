@@ -4,28 +4,35 @@ GStepper<STEPPER4WIRE> stepperX(2048, 13, 11, 12, 10);
 GStepper<STEPPER4WIRE> stepperY(2048, 9, 7, 8, 6);
 GStepper<STEPPER4WIRE> stepperZ(2048, 5, 3, 4, 2);
 
-const byte BT_1 = A0;
-const byte BT_2 = A1;
+// BT - кнопка, SW - тумблер
+const byte BT_1 = A0; // кнопка без фиксации
+const byte BT_2 = A1; // кнопка без фиксации
+// трёхпозиционный тумблер для переключения осей в режиме калибровки:
 const byte SW_1_1 = A2;
 const byte SW_1_2 = A3;
-const byte SW_2 = A4;
-const byte BT_3 = A5;
+// двухпозиционный тумблер для переключения режимов (калибровка/работа):
+const byte SW_2 = A4; 
+const byte BT_3 = A5; // кнопка без фиксации
 
+// скорости движения осей
 const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
 const float SPEED_Y = 400;
 const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
 
-// активация режима движения к каждой точке массива по нажатию кнопки
-const bool NEXT_POINT_FROM_BUTTON = false;
-
 // активация коррекции погрешности механики (внесение поправки в координаты)
 const bool CORRECTION_ENABLED = true;
+// величины корректировок
 const int X_CORRECTION = 50;
 const int Y_CORRECTION = 0;
+// величина начального сдвига для определения последних направлений
 const int SHIFT = 500;
 
-const int UP_POSITION = -500;
-const int DOWN_POSITION = 0;
+// верхняя и нижняя позиции головы (ось z)
+const int UP_HEAD_POSITION = -500;
+const int DOWN_HEAD_POSITION = 0;
+
+// активация режима движения к каждой точке массива по нажатию кнопки
+const bool NEXT_POINT_FROM_BUTTON = false;
 
 // массив точек:
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
@@ -182,7 +189,6 @@ void setZero() {
 bool goToZero(bool moveHeadDown) {
     bool xZeroReached = false;
     bool yZeroReached = false;
-    // bool zZeroReached = false;
     bool zeroReached = false;
 
     // Если одновременно включить 4 движка, то питание проседает,
@@ -266,9 +272,9 @@ bool moveHead(int z) {
     bool headMoved = false;
 
     if (z == 0) {
-        if (stepperZ.getCurrent() != UP_POSITION) {
+        if (stepperZ.getCurrent() != UP_HEAD_POSITION) {
             if (!stepperZ.tick()) {
-                stepperZ.setTarget(UP_POSITION);
+                stepperZ.setTarget(UP_HEAD_POSITION);
             }
         } else {
             stepperZ.brake();
@@ -276,9 +282,9 @@ bool moveHead(int z) {
             headPosition = UP;
         }
     } else if (z == 1) {
-        if (stepperZ.getCurrent() != DOWN_POSITION) {
+        if (stepperZ.getCurrent() != DOWN_HEAD_POSITION) {
             if (!stepperZ.tick()) {
-                stepperZ.setTarget(DOWN_POSITION);
+                stepperZ.setTarget(DOWN_HEAD_POSITION);
             }
         } else {
             stepperZ.brake();
@@ -291,7 +297,6 @@ bool moveHead(int z) {
 }
 
 void detectLastDirections() {
-    bool result = false;
     // Алгоритм такой: 
     //  поднимаем голову, выгоняем оси в 0 
     //  и делаем небольшой сдвиг туда-обратно
@@ -312,11 +317,9 @@ void detectLastDirections() {
             detectLastDirectionsState = START;
             xLastDirection = LEFT;
             yLastDirection = LEFT;
-            result = true;
+            lastDirectionsDetected = true;
         }        
     }
-
-    lastDirectionsDetected = result;
 }
 
 void updateLastDirections() {
@@ -415,12 +418,9 @@ void setupWorkMode() {
 
     workModeActive = true;
     calibrationModeActive = false;
-
-    lastDirectionsDetected = false;
 }
 
 void setup() {
-    // setupWorkMode();
     Serial.begin(9600);
 	
 	pinMode(BT_1, INPUT);
@@ -432,7 +432,6 @@ void setup() {
 
     workState = AWAIT_COMMAND;
     headPosition = DOWN;
-    detectLastDirectionsState = START;
     Serial.println("ready");
 }
 
@@ -557,10 +556,8 @@ void loop()	{
                         x = correctedX;
                         y = correctedY;
                     }
-                    // Serial.print("corrected x: ");
-                    // Serial.println(x);
-                    bool pointReached = goToPoint(x, y);
 
+                    bool pointReached = goToPoint(x, y);
                     if (pointReached) {
                         Serial.print(x);
                         Serial.print(" ");
