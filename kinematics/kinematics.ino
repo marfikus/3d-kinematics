@@ -138,6 +138,40 @@ bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
 
+struct SquareEquationResult {
+    byte statusCode;
+    long x1;
+    long x2;
+};
+
+SquareEquationResult solveSquareEquation(long a, long b, long c) {
+    byte statusCode = 0;
+    long x1 = 0;
+    long x2 = 0;
+    long d = (b * b) - 4 * a * c;
+    // Serial.println(d);
+
+    if (d > 0) {
+        // два корня
+        statusCode = 2;
+        long sqrtD = sqrt(d);
+        // Serial.println(sqrtD);
+        x1 = round((-b + sqrtD) / 2 * a);
+        x2 = round((-b - sqrtD) / 2 * a);
+    } else if (d == 0) {
+        // один корень
+        statusCode = 1;
+        x1 = round(-b / 2 * a);
+    } else {
+        // нет корней
+    }
+
+    // Serial.println(x1);
+    // Serial.println(x2);
+
+    return (SquareEquationResult) {statusCode, x1, x2};
+}
+
 void generateCirclePointsArray(int x0, int y0, int r, int step) {
     int xMin = x0 - r;
     int xMax = x0 + r;
@@ -147,6 +181,8 @@ void generateCirclePointsArray(int x0, int y0, int r, int step) {
     // int pointsSize = (r / step) * 4;
     // Serial.println(pointsSize);
     // int POINTS[pointsSize][3];
+
+
 
     int currentPos = 0;
     for (int x = xMin, y = y0; x < x0; x += step, y -= step) {
@@ -514,14 +550,23 @@ void setup() {
         Serial.begin(SERIAL_SPEED);
         Serial.println("ready");
     }
-    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
+
+    // SquareEquationResult result = solveSquareEquation(1, 6, 9);
+    SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
+    // SquareEquationResult result = solveSquareEquation(1, 6000, 8810000);
+    // SquareEquationResult result = solveSquareEquation(1, 6000, 8640000);
+    Serial.println(result.statusCode);
+    Serial.println(result.x1);
+    Serial.println(result.x2);
+
+/*    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
     for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(POINTS[i][0]);
         Serial.print(" ");
         Serial.print(POINTS[i][1]);
         Serial.print(" ");
         Serial.println(POINTS[i][2]);
-    }
+    }*/
 }
 
 void loop()	{
