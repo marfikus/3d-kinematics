@@ -79,7 +79,7 @@ int currentPoint = 0;
 
 // круг (массив заполняется при запуске в generateCirclePointsArray)
 // центр и радиус
-const int X0 = 3000;
+const int X0 = 2000;
 const int Y0 = 3000;
 const int RADIUS = 1000;
 // шаг координат
@@ -138,77 +138,98 @@ bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
 
-struct SquareEquationResult {
-    byte statusCode;
-    long x1;
-    long x2;
-};
-
 struct SquareEquationCoefficients {
     long a;
     long b;
     long c;
 };
 
-SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long r) {
+struct SquareEquationResult {
+    byte statusCode;
+    long r1;
+    long r2;
+};
+
+SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long radius) {
     long a = 1;
     long b = 2 * (-y0);
-    long c = sq(-y0) - (sq(r) - sq(x - x0));
+    long c = sq(-y0) - (sq(radius) - sq(x - x0));
 
     return (SquareEquationCoefficients) {a, b, c};   
 }
 
 SquareEquationResult solveSquareEquation(long a, long b, long c) {
     byte statusCode = 0;
-    long x1 = 0;
-    long x2 = 0;
+    long r1 = 0;
+    long r2 = 0;
     long d = (b * b) - 4 * a * c;
-    // Serial.println(d);
 
     if (d > 0) {
         // два корня
         statusCode = 2;
         long sqrtD = sqrt(d);
-        // Serial.println(sqrtD);
-        x1 = round((-b + sqrtD) / 2 * a);
-        x2 = round((-b - sqrtD) / 2 * a);
+        r1 = round((-b + sqrtD) / 2 * a);
+        r2 = round((-b - sqrtD) / 2 * a);
     } else if (d == 0) {
         // один корень
         statusCode = 1;
-        x1 = round(-b / 2 * a);
+        r1 = round(-b / 2 * a);
     } else {
         // нет корней
     }
 
-    // Serial.println(x1);
-    // Serial.println(x2);
-
-    return (SquareEquationResult) {statusCode, x1, x2};
+    return (SquareEquationResult) {statusCode, r1, r2};
 }
 
-void generateCirclePointsArray(int x0, int y0, int r, int step) {
-    int xMin = x0 - r;
-    int xMax = x0 + r;
-    int yMin = y0 - r;
-    int yMax = y0 + r;
+void generateCirclePointsArray(int x0, int y0, int radius, int step) {
+    int xMin = x0 - radius;
+    int xMax = x0 + radius;
+    int yMin = y0 - radius;
+    int yMax = y0 + radius;
 
-    // int pointsSize = (r / step) * 4;
+    // int pointsSize = (radius / step) * 4;
     // Serial.println(pointsSize);
     // int POINTS[pointsSize][3];
 
-
-    SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
-
     int currentPos = 0;
-    for (int x = xMin, y = y0; x < x0; x += step, y -= step) {
-
-
+    int simmetricPos = POINTS_SIZE - currentPos;
+    for (int x = xMin; x < x0; x += step) {
         POINTS[currentPos][0] = 1;
         POINTS[currentPos][1] = x;
-        POINTS[currentPos][2] = y;
+
+        SquareEquationCoefficients coefs = getSquareEquationCoefficients(x0, y0, x, radius);
+        SquareEquationResult result = solveSquareEquation(coefs.a, coefs.b, coefs.c);
+
+        // если 2 корня, то меньший ставим в текущую точку, а больший в симметричную верхнюю
+        if (result.statusCode == 2) {
+            POINTS[simmetricPos][0] = 1;
+            POINTS[simmetricPos][1] = x;
+
+            if (result.r1 < result.r2) {
+                POINTS[currentPos][2] = result.r1;
+                POINTS[simmetricPos][2] = result.r2;
+            } else {
+                POINTS[currentPos][2] = result.r2;
+                POINTS[simmetricPos][2] = result.r1;
+            }
+        // если 1 корень, то ставим его в текущую точку
+        } else if (result.statusCode == 1) {
+            POINTS[currentPos][2] = result.r1;
+        // если нет корней (что маловероятно)
+        } else if (result.statusCode == 0) {
+            // если не первая точка, то ставим в неё значение из предыдущей, иначе y0
+            if (currentPos != 0) {
+                POINTS[currentPos][2] = POINTS[currentPos - 1][2];
+            } else {
+                POINTS[currentPos][2] = y0;
+            }
+        }
+        
         currentPos++;
+        simmetricPos = POINTS_SIZE - currentPos;
     }
-    // Serial.println(currentPos);
+
+/*    // Serial.println(currentPos);
     for (int x = x0, y = yMin; x < xMax; x += step, y += step) {
         POINTS[currentPos][0] = 1;
         POINTS[currentPos][1] = x;
@@ -228,7 +249,7 @@ void generateCirclePointsArray(int x0, int y0, int r, int step) {
         POINTS[currentPos][1] = x;
         POINTS[currentPos][2] = y;
         currentPos++;
-    }
+    }*/
     // Serial.println(currentPos);
 
     POINTS[0][0] = 0;
@@ -570,27 +591,27 @@ void setup() {
 
     // SquareEquationCoefficients result = getSquareEquationCoefficients(2, 3, 1, 1);
     // SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1000, 1000);
-    SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1200, 1000);
+/*    SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1200, 1000);
     Serial.println(result.a);
     Serial.println(result.b);
-    Serial.println(result.c);
+    Serial.println(result.c);*/
 
-    SquareEquationResult result2 = solveSquareEquation(result.a, result.b, result.c);
+    // SquareEquationResult result2 = solveSquareEquation(result.a, result.b, result.c);
     // SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
     // SquareEquationResult result = solveSquareEquation(1, 6000, 8810000);
     // SquareEquationResult result = solveSquareEquation(1, 6000, 8640000);
-    Serial.println(result2.statusCode);
-    Serial.println(result2.x1);
-    Serial.println(result2.x2);
+/*    Serial.println(result2.statusCode);
+    Serial.println(result2.r1);
+    Serial.println(result2.r2);*/
 
-/*    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
+    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
     for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(POINTS[i][0]);
         Serial.print(" ");
         Serial.print(POINTS[i][1]);
         Serial.print(" ");
         Serial.println(POINTS[i][2]);
-    }*/
+    }
 }
 
 void loop()	{
