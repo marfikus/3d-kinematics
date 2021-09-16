@@ -24,7 +24,7 @@ const float SPEED_Y = 400;
 const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
 
 // активация коррекции погрешности механики (внесение поправки в координаты)
-const bool CORRECTION_ENABLED = false;
+const bool CORRECTION_ENABLED = true;
 // величины корректировок
 const int X_CORRECTION = 50;
 const int Y_CORRECTION = 0;
@@ -80,12 +80,12 @@ int currentPoint = 0;
 // круг (массив заполняется при запуске в generateCirclePointsArray)
 // центр и радиус
 const int X0 = 2000;
-const int Y0 = 3000;
-const int RADIUS = 1000;
+const int Y0 = 2000;
+const int RADIUS = 1500;
 // шаг координат
-const int STEP = 100;
+const int STEP = 50;
 
-const int POINTS_SIZE = (RADIUS / STEP) * 4;
+const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
 int POINTS[POINTS_SIZE][3];
 
 enum {
@@ -187,80 +187,88 @@ void generateCirclePointsArray(int x0, int y0, int radius, int step) {
     int yMin = y0 - radius;
     int yMax = y0 + radius;
 
-    // int pointsSize = (radius / step) * 4;
-    // Serial.println(pointsSize);
-    // int POINTS[pointsSize][3];
+    int pos1 = 0;
+    int pos4 = (POINTS_SIZE - 1) - pos1;
+    int pos3 = (POINTS_SIZE - 1) / 2;
+    int pos2 = (POINTS_SIZE - 1) - pos3;
 
-    int currentPos = 0;
-    int simmetricPos = POINTS_SIZE - currentPos;
-    for (int x = xMin; x < x0; x += step) {
-        POINTS[currentPos][0] = 1;
-        POINTS[currentPos][1] = x;
+    for (int x = xMin, x2 = xMax; x < x0; x += step, x2 -= step) {
+        POINTS[pos1][0] = 1;
+        POINTS[pos1][1] = x;
+
+        POINTS[pos3][0] = 1;
+        POINTS[pos3][1] = x2;
 
         SquareEquationCoefficients coefs = getSquareEquationCoefficients(x0, y0, x, radius);
         SquareEquationResult result = solveSquareEquation(coefs.a, coefs.b, coefs.c);
 
-        // если 2 корня, то меньший ставим в текущую точку, а больший в симметричную верхнюю
+        // заполнение всех четвертей за один проход
+        // если 2 корня, то меньший ставим в текущую точку, а больший симметрично в верхнюю четверть,
+        // ну и другие тоже симметрично (на графике сразу понятно)
         if (result.statusCode == 2) {
-            POINTS[simmetricPos][0] = 1;
-            POINTS[simmetricPos][1] = x;
+            POINTS[pos4][0] = 1;
+            POINTS[pos4][1] = x;
+
+            POINTS[pos2][0] = 1;
+            POINTS[pos2][1] = x2;
 
             if (result.r1 < result.r2) {
-                POINTS[currentPos][2] = result.r1;
-                POINTS[simmetricPos][2] = result.r2;
+                POINTS[pos1][2] = result.r1;
+                POINTS[pos4][2] = result.r2;
+
+                POINTS[pos2][2] = result.r1;
+                POINTS[pos3][2] = result.r2;
             } else {
-                POINTS[currentPos][2] = result.r2;
-                POINTS[simmetricPos][2] = result.r1;
+                POINTS[pos1][2] = result.r2;
+                POINTS[pos4][2] = result.r1;
+
+                POINTS[pos2][2] = result.r2;
+                POINTS[pos3][2] = result.r1;
             }
         // если 1 корень, то ставим его в текущую точку
         } else if (result.statusCode == 1) {
-            POINTS[currentPos][2] = result.r1;
-        // если нет корней (что маловероятно)
+            POINTS[pos1][2] = result.r1;
+
+            POINTS[pos3][2] = result.r1;
+        // если нет корней (что маловероятно), то
         } else if (result.statusCode == 0) {
             // если не первая точка, то ставим в неё значение из предыдущей, иначе y0
-            if (currentPos != 0) {
-                POINTS[currentPos][2] = POINTS[currentPos - 1][2];
+            if (pos1 != 0) {
+                POINTS[pos1][2] = POINTS[pos1 - 1][2];
+                POINTS[pos2][2] = POINTS[pos2 - 1][2];
+                POINTS[pos3][2] = POINTS[pos3 - 1][2];
+                POINTS[pos4][2] = POINTS[pos4 - 1][2];
             } else {
-                POINTS[currentPos][2] = y0;
+                POINTS[pos1][2] = y0;
+                POINTS[pos2][2] = y0;
+                POINTS[pos3][2] = y0;
+                POINTS[pos4][2] = y0;
             }
         }
         
-        currentPos++;
-        simmetricPos = POINTS_SIZE - currentPos;
+        pos1++;
+        pos4 = (POINTS_SIZE - 1) - pos1;
+        pos3++;
+        pos2 = (POINTS_SIZE - 1) - pos3;
     }
 
-/*    // Serial.println(currentPos);
-    for (int x = x0, y = yMin; x < xMax; x += step, y += step) {
-        POINTS[currentPos][0] = 1;
-        POINTS[currentPos][1] = x;
-        POINTS[currentPos][2] = y;
-        currentPos++;
-    }
-    // Serial.println(currentPos);
-    for (int x = xMax, y = y0; x > x0; x -= step, y += step) {
-        POINTS[currentPos][0] = 1;
-        POINTS[currentPos][1] = x;
-        POINTS[currentPos][2] = y;
-        currentPos++;
-    }
-    // Serial.println(currentPos);
-    for (int x = x0, y = yMax; x > xMin; x -= step, y -= step) {
-        POINTS[currentPos][0] = 1;
-        POINTS[currentPos][1] = x;
-        POINTS[currentPos][2] = y;
-        currentPos++;
-    }*/
-    // Serial.println(currentPos);
+    // заполнение оставшихся крайних точек
+    // (можно наверное и их в цикле заполнить, но пока не сообразил)
+    POINTS[pos1][0] = 1;
+    POINTS[pos1][1] = x0;
+    POINTS[pos1][2] = yMin;
 
+    POINTS[pos3][0] = 1;
+    POINTS[pos3][1] = x0;
+    POINTS[pos3][2] = yMax;
+
+    // указываем, чтобы к первой точке двигался с поднятой головой
     POINTS[0][0] = 0;
 
-/*    for (int i = 0; i < pointsSize; i++) {
-        Serial.print(POINTS[i][0]);
-        Serial.print(" ");
-        Serial.print(POINTS[i][1]);
-        Serial.print(" ");
-        Serial.println(POINTS[i][2]);
-    }*/
+    // заполняем последнюю точку, чтобы замкнуть круг
+    POINTS[POINTS_SIZE - 1][0] = 1;
+    POINTS[POINTS_SIZE - 1][1] = POINTS[0][1];
+    POINTS[POINTS_SIZE - 1][2] = POINTS[0][2];
 }
 
 void detectCurrentMode() {
@@ -589,23 +597,11 @@ void setup() {
         Serial.println("ready");
     }
 
-    // SquareEquationCoefficients result = getSquareEquationCoefficients(2, 3, 1, 1);
-    // SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1000, 1000);
-/*    SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1200, 1000);
-    Serial.println(result.a);
-    Serial.println(result.b);
-    Serial.println(result.c);*/
-
-    // SquareEquationResult result2 = solveSquareEquation(result.a, result.b, result.c);
-    // SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
-    // SquareEquationResult result = solveSquareEquation(1, 6000, 8810000);
-    // SquareEquationResult result = solveSquareEquation(1, 6000, 8640000);
-/*    Serial.println(result2.statusCode);
-    Serial.println(result2.r1);
-    Serial.println(result2.r2);*/
-
     generateCirclePointsArray(X0, Y0, RADIUS, STEP);
+
     for (int i = 0; i < POINTS_SIZE; i++) {
+        Serial.print(i);
+        Serial.print(") ");
         Serial.print(POINTS[i][0]);
         Serial.print(" ");
         Serial.print(POINTS[i][1]);
