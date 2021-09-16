@@ -144,6 +144,20 @@ struct SquareEquationResult {
     long x2;
 };
 
+struct SquareEquationCoefficients {
+    long a;
+    long b;
+    long c;
+};
+
+SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long r) {
+    long a = 1;
+    long b = 2 * (-y0);
+    long c = sq(-y0) - (sq(r) - sq(x - x0));
+
+    return (SquareEquationCoefficients) {a, b, c};   
+}
+
 SquareEquationResult solveSquareEquation(long a, long b, long c) {
     byte statusCode = 0;
     long x1 = 0;
@@ -183,9 +197,12 @@ void generateCirclePointsArray(int x0, int y0, int r, int step) {
     // int POINTS[pointsSize][3];
 
 
+    SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
 
     int currentPos = 0;
     for (int x = xMin, y = y0; x < x0; x += step, y -= step) {
+
+
         POINTS[currentPos][0] = 1;
         POINTS[currentPos][1] = x;
         POINTS[currentPos][2] = y;
@@ -551,13 +568,20 @@ void setup() {
         Serial.println("ready");
     }
 
-    // SquareEquationResult result = solveSquareEquation(1, 6, 9);
-    SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
+    // SquareEquationCoefficients result = getSquareEquationCoefficients(2, 3, 1, 1);
+    // SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1000, 1000);
+    SquareEquationCoefficients result = getSquareEquationCoefficients(2000, 3000, 1200, 1000);
+    Serial.println(result.a);
+    Serial.println(result.b);
+    Serial.println(result.c);
+
+    SquareEquationResult result2 = solveSquareEquation(result.a, result.b, result.c);
+    // SquareEquationResult result = solveSquareEquation(1, 6000, 9000000);
     // SquareEquationResult result = solveSquareEquation(1, 6000, 8810000);
     // SquareEquationResult result = solveSquareEquation(1, 6000, 8640000);
-    Serial.println(result.statusCode);
-    Serial.println(result.x1);
-    Serial.println(result.x2);
+    Serial.println(result2.statusCode);
+    Serial.println(result2.x1);
+    Serial.println(result2.x2);
 
 /*    generateCirclePointsArray(X0, Y0, RADIUS, STEP);
     for (int i = 0; i < POINTS_SIZE; i++) {
