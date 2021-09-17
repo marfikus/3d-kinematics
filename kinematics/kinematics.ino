@@ -1,8 +1,28 @@
 #include <GyverStepper.h>
 
 GStepper<STEPPER4WIRE> stepperX(2048, 13, 11, 12, 10);
+/* подключение к драйверу:
+in 1 - 10 
+in 2 - 11
+in 3 - 12
+in 4 - 13
+*/
+
 GStepper<STEPPER4WIRE> stepperY(2048, 9, 7, 8, 6);
+/* подключение к драйверу:
+in 1 - 6 
+in 2 - 7
+in 3 - 8
+in 4 - 9
+*/
+
 GStepper<STEPPER4WIRE> stepperZ(2048, 5, 3, 4, 2);
+/* подключение к драйверу (тут на два драйвера параллельно):
+in 1 - 2 
+in 2 - 3
+in 3 - 4
+in 4 - 5
+*/
 
 // BT - кнопка, SW - тумблер
 const byte BT_1 = A0; // кнопка без фиксации
@@ -18,10 +38,11 @@ const byte BT_3 = A5; // кнопка без фиксации
 const bool SERIAL_ENABLED = true;
 const long SERIAL_SPEED = 9600;
 
-// скорости движения осей
-const float SPEED_X = 400; // для одного движка, больше 540 уже клинит иногда
+// скорости движения осей:
+// для одного движка, больше 540 клинит иногда, для двух в параллель больше 450
+const float SPEED_X = 400;
 const float SPEED_Y = 400;
-const float SPEED_Z = 300; // для двух движков в параллель, больше 450 уже клинит иногда
+const float SPEED_Z = 300;
 
 // активация коррекции погрешности механики (внесение поправки в координаты)
 const bool CORRECTION_ENABLED = true;
@@ -38,19 +59,20 @@ const int DOWN_HEAD_POSITION = 0;
 // активация режима движения к каждой точке массива по нажатию кнопки
 const bool NEXT_POINT_FROM_BUTTON = false;
 
+
 // массив точек:
 // первый элемент - положение головки(0 - поднята, 1 - опущена)
 // второй элемент - координата х
 // третий элемент - координата у
 
 // прямоугольник:
-/*const int POINTS[][3] = {
+int POINTS[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
     {1, 3000, 1000}
-};*/
+};
 
 //прямоугольный треугольник:
 /*int POINTS[][3] = {
@@ -60,8 +82,22 @@ const bool NEXT_POINT_FROM_BUTTON = false;
     {1, 1700, 600},
 };*/
 
+// равнобедренный треугольник:
+/*
+Тут обнаруживается баг: неравномерность движения к точке.
+Если величина перемещения по осям одинакова, то все норм, но если разная,
+то когда одна из осей останавливается, то дальше получается прямая линия.
+Начал попытки это исправить в ветке fix-goToPoint, путем вычисления соотношения шагов по осям.
+*/
+/*int POINTS[][3] = {
+    {0, 1000, 1500},
+    {1, 2500, 500},
+    {1, 2500, 2500},
+    {1, 1000, 1500},
+};*/
+
 // восьмиугольник:
-const int POINTS[][3] = {
+/*int POINTS[][3] = {
     {0, 2000, 1000},
     {1, 3000, 1000},
     {1, 4000, 2000},
@@ -71,11 +107,30 @@ const int POINTS[][3] = {
     {1, 1000, 3000},
     {1, 1000, 2000},
     {1, 2000, 1000},
-};
+};*/
 
 // вычисление количества элементов в массиве
+// (только если массив заполняется вручную (варианты выше),
+// иначе размер задается ниже!)
 const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
-int currentPoint = 0;
+
+
+// окружность (массив заполняется при запуске в generateCirclePointsArray
+// или в generateCirclePointsArray2 (раскомментировать нужное в setup)):
+// центр и радиус:
+const int X0 = 2000;
+const int Y0 = 2000;
+const int RADIUS = 1500;
+// шаг координат (для generateCirclePointsArray):
+const int STEP = 50;
+// размер массива: 
+// для generateCirclePointsArray:
+// const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
+// для generateCirclePointsArray2:
+// const int POINTS_SIZE = 91;
+// создание массива для окружности:
+// int POINTS[POINTS_SIZE][3];
+
 
 enum {
     X,
@@ -126,6 +181,154 @@ int yCorrection = 0;
 bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
+int currentPoint = 0;
+
+struct SquareEquationCoefficients {
+    long a;
+    long b;
+    long c;
+};
+
+struct SquareEquationResult {
+    byte statusCode;
+    long r1;
+    long r2;
+};
+
+SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long radius) {
+    long a = 1;
+    long b = 2 * (-y0);
+    long c = sq(-y0) - (sq(radius) - sq(x - x0));
+
+    return (SquareEquationCoefficients) {a, b, c};   
+}
+
+SquareEquationResult solveSquareEquation(long a, long b, long c) {
+    byte statusCode = 0;
+    long r1 = 0;
+    long r2 = 0;
+    long d = (b * b) - 4 * a * c;
+
+    if (d > 0) {
+        // два корня
+        statusCode = 2;
+        long sqrtD = sqrt(d);
+        r1 = round((-b + sqrtD) / 2 * a);
+        r2 = round((-b - sqrtD) / 2 * a);
+    } else if (d == 0) {
+        // один корень
+        statusCode = 1;
+        r1 = round(-b / 2 * a);
+    } else {
+        // нет корней
+    }
+
+    return (SquareEquationResult) {statusCode, r1, r2};
+}
+
+void generateCirclePointsArray() {
+    int xMin = X0 - RADIUS;
+    int xMax = X0 + RADIUS;
+    int yMin = Y0 - RADIUS;
+    int yMax = Y0 + RADIUS;
+
+    int pos1 = 0;
+    int pos4 = (POINTS_SIZE - 1) - pos1;
+    int pos3 = (POINTS_SIZE - 1) / 2;
+    int pos2 = (POINTS_SIZE - 1) - pos3;
+
+    for (int x = xMin, x2 = xMax; x < X0; x += STEP, x2 -= STEP) {
+        POINTS[pos1][0] = 1;
+        POINTS[pos1][1] = x;
+
+        POINTS[pos3][0] = 1;
+        POINTS[pos3][1] = x2;
+
+        SquareEquationCoefficients coefs = getSquareEquationCoefficients(X0, Y0, x, RADIUS);
+        SquareEquationResult result = solveSquareEquation(coefs.a, coefs.b, coefs.c);
+
+        // заполнение всех четвертей за один проход
+        // если 2 корня, то меньший ставим в текущую точку, а больший симметрично в верхнюю четверть,
+        // ну и другие тоже симметрично (на графике сразу понятно)
+        if (result.statusCode == 2) {
+            POINTS[pos4][0] = 1;
+            POINTS[pos4][1] = x;
+
+            POINTS[pos2][0] = 1;
+            POINTS[pos2][1] = x2;
+
+            if (result.r1 < result.r2) {
+                POINTS[pos1][2] = result.r1;
+                POINTS[pos4][2] = result.r2;
+
+                POINTS[pos2][2] = result.r1;
+                POINTS[pos3][2] = result.r2;
+            } else {
+                POINTS[pos1][2] = result.r2;
+                POINTS[pos4][2] = result.r1;
+
+                POINTS[pos2][2] = result.r2;
+                POINTS[pos3][2] = result.r1;
+            }
+        // если 1 корень, то ставим его в текущую точку
+        } else if (result.statusCode == 1) {
+            POINTS[pos1][2] = result.r1;
+
+            POINTS[pos3][2] = result.r1;
+        // если нет корней (что маловероятно), то
+        } else if (result.statusCode == 0) {
+            // если не первая точка, то ставим в неё значение из предыдущей, иначе Y0
+            if (pos1 != 0) {
+                POINTS[pos1][2] = POINTS[pos1 - 1][2];
+                POINTS[pos2][2] = POINTS[pos2 - 1][2];
+                POINTS[pos3][2] = POINTS[pos3 - 1][2];
+                POINTS[pos4][2] = POINTS[pos4 - 1][2];
+            } else {
+                POINTS[pos1][2] = Y0;
+                POINTS[pos2][2] = Y0;
+                POINTS[pos3][2] = Y0;
+                POINTS[pos4][2] = Y0;
+            }
+        }
+        
+        pos1++;
+        pos4 = (POINTS_SIZE - 1) - pos1;
+        pos3++;
+        pos2 = (POINTS_SIZE - 1) - pos3;
+    }
+
+    // заполнение оставшихся крайних точек
+    // (можно наверное и их в цикле заполнить, но пока не сообразил)
+    POINTS[pos1][0] = 1;
+    POINTS[pos1][1] = X0;
+    POINTS[pos1][2] = yMin;
+
+    POINTS[pos3][0] = 1;
+    POINTS[pos3][1] = X0;
+    POINTS[pos3][2] = yMax;
+
+    // указываем, чтобы к первой точке двигался с поднятой головой
+    POINTS[0][0] = 0;
+
+    // заполняем последнюю точку, чтобы замкнуть круг
+    POINTS[POINTS_SIZE - 1][0] = 1;
+    POINTS[POINTS_SIZE - 1][1] = POINTS[0][1];
+    POINTS[POINTS_SIZE - 1][2] = POINTS[0][2];
+}
+
+// в общем делает то же самое, что и предыдущая функция, но гораздо проще
+void generateCirclePointsArray2() {
+    int n = POINTS_SIZE - 1;
+    for (int i = 0; i < POINTS_SIZE; i++) {
+        int x = cos(2 * PI * i / n) * RADIUS + X0;
+        int y = sin(2 * PI * i / n) * RADIUS + Y0;
+
+        POINTS[i][0] = 1;
+        POINTS[i][1] = x;
+        POINTS[i][2] = y;
+    }
+    POINTS[0][0] = 0;
+}
 
 void detectCurrentMode() {
     if (digitalRead(SW_2) == HIGH) {
@@ -452,6 +655,19 @@ void setup() {
         Serial.begin(SERIAL_SPEED);
         Serial.println("ready");
     }
+
+    // generateCirclePointsArray();
+    // generateCirclePointsArray2();
+
+/*    for (int i = 0; i < POINTS_SIZE; i++) {
+        Serial.print(i);
+        Serial.print(") ");
+        Serial.print(POINTS[i][0]);
+        Serial.print(" ");
+        Serial.print(POINTS[i][1]);
+        Serial.print(" ");
+        Serial.println(POINTS[i][2]);
+    }*/
 }
 
 void loop()	{
