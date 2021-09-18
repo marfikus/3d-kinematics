@@ -45,7 +45,7 @@ const float SPEED_Y = 400;
 const float SPEED_Z = 300;
 
 // активация коррекции погрешности механики (внесение поправки в координаты)
-const bool CORRECTION_ENABLED = true;
+const bool CORRECTION_ENABLED = false;
 // величины корректировок
 const int X_CORRECTION = 50;
 const int Y_CORRECTION = 0;
@@ -66,13 +66,13 @@ const bool NEXT_POINT_FROM_BUTTON = true;
 // третий элемент - координата у
 
 // прямоугольник:
-int POINTS[][3] = {
+/*int POINTS[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
     {1, 3000, 1000}
-};
+};*/
 
 //прямоугольный треугольник:
 /*int POINTS[][3] = {
@@ -197,6 +197,12 @@ int maxTicksX = 0;
 int maxTicksY = 0;
 int tickCounterX = 0;
 int tickCounterY = 0;
+bool ignoreMaxTicks = false;
+
+bool xSubPointActive = false;
+bool ySubPointActive = false;
+int xSubPoint = 0;
+int ySubPoint = 0;
 
 struct SquareEquationCoefficients {
     long a;
@@ -473,10 +479,24 @@ bool goToZero() {
     return goToZero(true);
 }
 
-bool goToPoint(int x, int y, bool ignoreMaxTicks) {
+int getSubPoint(int currentPos, int newPos, int step) {
+    int subPoint = currentPos;
+
+    if (newPos > currentPos) {
+        subPoint = currentPos + step;
+    } else if (newPos < currentPos) {
+        subPoint = currentPos - step;
+    }
+
+    return subPoint;
+}
+
+bool goToPoint(int x, int y) {
     bool xReached = false;
     bool yReached = false;
     bool pointReached = false;
+    bool xSubPointReached = false;
+    bool ySubPointReached = false;
 
     if (stepperX.getCurrent() != x) {
         if (ignoreMaxTicks) {
@@ -484,34 +504,62 @@ bool goToPoint(int x, int y, bool ignoreMaxTicks) {
                 stepperX.setTarget(x);
             }            
         } else {
-            if (tickCounterX < maxTicksX) {
+            if (!xSubPointActive) {
+                xSubPoint = getSubPoint(stepperX.getCurrent(), x, maxTicksX);
+                xSubPointActive = true;
+            }
+            if (stepperX.getCurrent() != xSubPoint) {
                 if (!stepperX.tick()) {
-                    stepperX.setTarget(x);
-                }
-                tickCounterX++;
+                    stepperX.setTarget(xSubPoint);
+                }                
+            } else {
+                xSubPointReached = true;
             }
         }
     } else {
         stepperX.brake();
         xReached = true;
+        // tickCounterX++;
+        ignoreMaxTicks = true;
     }
 
     if (stepperY.getCurrent() != y) {
         if (ignoreMaxTicks) {
             if (!stepperY.tick()) {
                 stepperY.setTarget(y);
-            }            
+            }
         } else {
-            if (tickCounterY < maxTicksY) {
+            if (!ySubPointActive) {
+                ySubPoint = getSubPoint(stepperY.getCurrent(), y, maxTicksY);
+                ySubPointActive = true;
+            }
+            if (stepperY.getCurrent() != ySubPoint) {
                 if (!stepperY.tick()) {
-                    stepperY.setTarget(y);
-                }
-                tickCounterY++;
+                    stepperY.setTarget(ySubPoint);
+                }                
+            } else {
+                ySubPointReached = true;
             }
         }
     } else {
         stepperY.brake();
         yReached = true;
+        // tickCounterY++;
+        ignoreMaxTicks = true;
+    }
+
+/*    if (!ignoreMaxTicks) {
+        if ((tickCounterX == maxTicksX) && (tickCounterY == maxTicksY)) {
+            // Serial.println("reset tick counters");
+            tickCounterX = 0;
+            tickCounterY = 0;
+            delay(5);
+        }
+    }*/
+
+    if (xSubPointReached && ySubPointReached) {
+        xSubPointActive = false;
+        ySubPointActive = false;
     }
 
     if (xReached && yReached) {
@@ -521,9 +569,9 @@ bool goToPoint(int x, int y, bool ignoreMaxTicks) {
     return pointReached;
 }
 
-bool goToPoint(int x, int y) {
+/*bool goToPoint(int x, int y) {
     return goToPoint(x, y, false);
-}
+}*/
 
 bool moveHead(int z) {
     bool headMoved = false;
@@ -564,7 +612,7 @@ void detectLastDirections() {
             detectLastDirectionsState = ZERO_REACHED;
         }
     } else if (detectLastDirectionsState == ZERO_REACHED) {
-        bool shiftReached = goToPoint(SHIFT, SHIFT, true);
+        bool shiftReached = goToPoint(SHIFT, SHIFT);
         if (shiftReached) {
             detectLastDirectionsState = SHIFT_REACHED;
         }
@@ -636,17 +684,25 @@ void computeTicksRatio(int x, int y) {
     int diffY = abs(stepperY.getCurrent() - y);
     Serial.println(diffX);
     Serial.println(diffY);
+
+    if ((diffX == 0) || (diffY == 0)) {
+        Serial.println("ignoreMaxTicks");
+        ignoreMaxTicks = true;
+        ticksRatioComputed = true;
+        return;
+    }
+
     maxTicksX = 1;
     maxTicksY = 1;
 
     if (diffX > diffY) {
         Serial.println("diffX > diffY");
-        // maxTicksX = round(diffX / diffY);
-        maxTicksX = (diffX + diffY - 1) / diffY;
+        maxTicksX = round((float)diffX / (float)diffY);
+        // maxTicksX = (diffX + diffY - 1) / diffY;
     } else if (diffY > diffX) {
         Serial.println("diffY > diffX");
-        // maxTicksY = round(diffY / diffX);
-        maxTicksY = (diffX + diffY - 1) / diffX;
+        maxTicksY = round((float)diffY / (float)diffX);
+        // maxTicksY = (diffX + diffY - 1) / diffX;
     }
 
     Serial.println(maxTicksX);
@@ -782,6 +838,9 @@ void loop()	{
                 ticksRatioComputed = false;
                 tickCounterX = 0;
                 tickCounterY = 0;
+                ignoreMaxTicks = false;
+                xSubPointActive = false;
+                ySubPointActive = false;
                 workState = AWAIT_COMMAND;
                 delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
             }
@@ -862,13 +921,6 @@ void loop()	{
 
                     bool pointReached = goToPoint(x, y);
 
-                    if ((tickCounterX == maxTicksX) && (tickCounterY == maxTicksY)) {
-                        // Serial.println("reset tick counters");
-                        tickCounterX = 0;
-                        tickCounterY = 0;
-                        delay(5);
-                    }
-
                     if (pointReached) {
                         Serial.print(x);
                         Serial.print(" ");
@@ -897,6 +949,9 @@ void loop()	{
                         ticksRatioComputed = false;
                         tickCounterX = 0;
                         tickCounterY = 0;
+                        ignoreMaxTicks = false;
+                        xSubPointActive = false;
+                        ySubPointActive = false;
                     }
                 }
             }
