@@ -121,7 +121,7 @@ int POINTS[][3] = {
 
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
-// иначе размер задается ниже!)
+// иначе, для генерируемого массива, размер задается ниже!)
 const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
@@ -192,18 +192,7 @@ bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
 int currentPoint = 0;
-
 bool steppersSpeedCorrected = false;
-/*int maxTicksX = 0;
-int maxTicksY = 0;
-int tickCounterX = 0;
-int tickCounterY = 0;
-bool ignoreMaxTicks = false;
-
-bool xSubPointActive = false;
-bool ySubPointActive = false;
-int xSubPoint = 0;
-int ySubPoint = 0;*/
 
 struct SquareEquationCoefficients {
     long a;
@@ -217,6 +206,7 @@ struct SquareEquationResult {
     long r2;
 };
 
+// получает коэффициенты квадратного уравнения из имеющихся данных о окружности
 SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long radius) {
     long a = 1;
     long b = 2 * (-y0);
@@ -225,6 +215,7 @@ SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long 
     return (SquareEquationCoefficients) {a, b, c};   
 }
 
+// решает квадратное уравнение
 SquareEquationResult solveSquareEquation(long a, long b, long c) {
     byte statusCode = 0;
     long r1 = 0;
@@ -429,8 +420,7 @@ void setZero() {
 }
 
 bool goToZero(bool moveHeadDown) {
-    bool xZeroReached = false;
-    bool yZeroReached = false;
+    bool xyZeroReached = false;
     bool zeroReached = false;
 
     // Если одновременно включить 4 движка, то питание проседает,
@@ -439,28 +429,12 @@ bool goToZero(bool moveHeadDown) {
 
     // если голова поднята, то выгоняем оси, иначе сначала поднимаем голову
     if (headPosition == UP) {
-        if (stepperX.getCurrent() != 0) {
-            if (!stepperX.tick()) {
-                stepperX.setTarget(0);
-            }
-        } else {
-            stepperX.brake();
-            xZeroReached = true;
-        }
-
-        if (stepperY.getCurrent() != 0) {
-            if (!stepperY.tick()) {
-                stepperY.setTarget(0);
-            }
-        } else {
-            stepperY.brake();
-            yZeroReached = true;
-        }
+        xyZeroReached = goToPoint(0, 0, true);
     } else {
         moveHead(0);
     }
 
-    if (xZeroReached && yZeroReached) {
+    if (xyZeroReached) {
         // если нужно опускаем голову
         if (moveHeadDown) {
             bool headMoved = moveHead(1);
@@ -480,18 +454,6 @@ bool goToZero() {
     return goToZero(true);
 }
 
-int getSubPoint(int currentPos, int newPos, int step) {
-    int subPoint = currentPos;
-
-    if (newPos > currentPos) {
-        subPoint = currentPos + step;
-    } else if (newPos < currentPos) {
-        subPoint = currentPos - step;
-    }
-
-    return subPoint;
-}
-
 bool goToPoint(int x, int y, bool resetSpeed) {
     bool xReached = false;
     bool yReached = false;
@@ -499,7 +461,6 @@ bool goToPoint(int x, int y, bool resetSpeed) {
 
     if (!steppersSpeedCorrected) {
         correctSteppersSpeed(x, y, resetSpeed);
-        Serial.println("steppersSpeedCorrected");
     }
 
     if (stepperX.getCurrent() != x) {
@@ -645,38 +606,24 @@ void correctSteppersSpeed(int x, int y, bool resetSpeed) {
     if (!resetSpeed) {
         int diffX = abs(stepperX.getCurrent() - x);
         int diffY = abs(stepperY.getCurrent() - y);
-        Serial.println(diffX);
-        Serial.println(diffY);
 
         if ((diffX == 0) || (diffY == 0) || (diffX == diffY)) {
-            Serial.println("set max speed");
             trueSpeedX = MAX_SPEED_X;
             trueSpeedY = MAX_SPEED_Y;
 
         } else if (diffX > diffY) {
-            Serial.println("diffX > diffY");
             float timeX = (float)diffX / MAX_SPEED_X;
-            Serial.println(timeX);
             trueSpeedY = (float)diffY / timeX;
 
         } else if (diffY > diffX) {
-            Serial.println("diffY > diffX");
             float timeY = (float)diffY / MAX_SPEED_Y;
-            Serial.println(timeY);
             trueSpeedX = (float)diffX / timeY;
         }
     }
 
-    Serial.println(trueSpeedX);
-    Serial.println(trueSpeedY);
-
     stepperX.setMaxSpeed(trueSpeedX);
     stepperY.setMaxSpeed(trueSpeedY);
     steppersSpeedCorrected = true;
-}
-
-void correctSteppersSpeed(int x, int y) {
-    return correctSteppersSpeed(x, y, false);
 }
 
 void setupCalibrationMode() {
@@ -805,11 +752,6 @@ void loop()	{
                 awaitButton = true;
                 lastDirectionsDetected = false;
                 steppersSpeedCorrected = false;
-/*                tickCounterX = 0;
-                tickCounterY = 0;
-                ignoreMaxTicks = false;
-                xSubPointActive = false;
-                ySubPointActive = false;*/
                 workState = AWAIT_COMMAND;
                 delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
             }
@@ -908,13 +850,6 @@ void loop()	{
                             updateLastDirections();
                             correctedValues = false;
                         }
-
-                        // steppersSpeedCorrected = false;
-/*                        tickCounterX = 0;
-                        tickCounterY = 0;
-                        ignoreMaxTicks = false;
-                        xSubPointActive = false;
-                        ySubPointActive = false;*/
                     }
                 }
             }
