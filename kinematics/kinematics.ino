@@ -34,15 +34,17 @@ const byte SW_1_2 = A3;
 const byte SW_2 = A4; 
 const byte BT_3 = A5; // кнопка без фиксации
 
-// активация serial
-const bool SERIAL_ENABLED = true;
+// активация serial:
+// (заметил, что включенный serial мешает рисовать окружности (сбивается с координат)) 
+const bool SERIAL_ENABLED = false;
 const long SERIAL_SPEED = 9600;
 
-// скорости движения осей:
+// максимальные скорости движения осей:
+// (реальные скорости будут вычисляться в работе для равномерного движения)
 // для одного движка, больше 540 клинит иногда, для двух в параллель больше 450
-const float SPEED_X = 400;
-const float SPEED_Y = 400;
-const float SPEED_Z = 300;
+const float MAX_SPEED_X = 400;
+const float MAX_SPEED_Y = 400;
+const float MAX_SPEED_Z = 300;
 
 // активация коррекции погрешности механики (внесение поправки в координаты)
 const bool CORRECTION_ENABLED = true;
@@ -66,13 +68,13 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 // третий элемент - координата у
 
 // прямоугольник:
-int POINTS[][3] = {
+/*int POINTS[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
     {1, 3000, 1000}
-};
+};*/
 
 //прямоугольный треугольник:
 /*int POINTS[][3] = {
@@ -83,17 +85,19 @@ int POINTS[][3] = {
 };*/
 
 // равнобедренный треугольник:
-/*
-Тут обнаруживается баг: неравномерность движения к точке.
-Если величина перемещения по осям одинакова, то все норм, но если разная,
-то когда одна из осей останавливается, то дальше получается прямая линия.
-Начал попытки это исправить в ветке fix-goToPoint, путем вычисления соотношения шагов по осям.
-*/
-/*int POINTS[][3] = {
+int POINTS[][3] = {
     {0, 1000, 1500},
     {1, 2500, 500},
     {1, 2500, 2500},
     {1, 1000, 1500},
+};
+
+//прямоугольный треугольник 2:
+/*int POINTS[][3] = {
+    {0, 500, 1000},
+    {1, 2000, 1000},
+    {1, 2000, 0},
+    {1, 500, 1000},
 };*/
 
 // восьмиугольник:
@@ -111,7 +115,7 @@ int POINTS[][3] = {
 
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
-// иначе размер задается ниже!)
+// иначе (для генерируемого массива) размер задается ниже!)
 const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
@@ -120,7 +124,7 @@ const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 // центр и радиус:
 const int X0 = 2000;
 const int Y0 = 2000;
-const int RADIUS = 1500;
+const int RADIUS = 1000;
 // шаг координат (для generateCirclePointsArray):
 const int STEP = 50;
 // размер массива: 
@@ -182,6 +186,7 @@ bool calibrationModeActive = false;
 bool workModeActive = false;
 bool awaitButton = true;
 int currentPoint = 0;
+bool steppersSpeedCorrected = false;
 
 struct SquareEquationCoefficients {
     long a;
@@ -196,6 +201,11 @@ struct SquareEquationResult {
 };
 
 SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long x, long radius) {
+    /*
+    Получает коэффициенты квадратного уравнения 
+    из имеющихся данных о окружности
+    */
+
     long a = 1;
     long b = 2 * (-y0);
     long c = sq(-y0) - (sq(radius) - sq(x - x0));
@@ -204,6 +214,10 @@ SquareEquationCoefficients getSquareEquationCoefficients(long x0, long y0, long 
 }
 
 SquareEquationResult solveSquareEquation(long a, long b, long c) {
+    /*
+    Решает квадратное уравнение
+    */
+
     byte statusCode = 0;
     long r1 = 0;
     long r2 = 0;
@@ -227,6 +241,12 @@ SquareEquationResult solveSquareEquation(long a, long b, long c) {
 }
 
 void generateCirclePointsArray() {
+    /*
+    Заполняет массив точек, посредством решения 
+    квадратных уравнений для точек одной четверти, 
+    а потом симметрично заполняет остальные 
+    */
+
     int xMin = X0 - RADIUS;
     int xMax = X0 + RADIUS;
     int yMin = Y0 - RADIUS;
@@ -316,8 +336,12 @@ void generateCirclePointsArray() {
     POINTS[POINTS_SIZE - 1][2] = POINTS[0][2];
 }
 
-// в общем делает то же самое, что и предыдущая функция, но гораздо проще
 void generateCirclePointsArray2() {
+    /*
+    В общем делает то же самое, что и предыдущая функция, 
+    но гораздо короче
+    */
+
     int n = POINTS_SIZE - 1;
     for (int i = 0; i < POINTS_SIZE; i++) {
         int x = cos(2 * PI * i / n) * RADIUS + X0;
@@ -331,6 +355,10 @@ void generateCirclePointsArray2() {
 }
 
 void detectCurrentMode() {
+    /*
+    Определяет текущий режим работы по положению тумблера
+    */
+
     if (digitalRead(SW_2) == HIGH) {
         currentMode = CALIBRATION;
     } else {
@@ -339,6 +367,10 @@ void detectCurrentMode() {
 }
 
 void detectCurrentAxis() {
+    /*
+    Определяет текущую ось по положению тумблера (в режиме калибровки)
+    */
+
     if (digitalRead(SW_1_1) == HIGH) {
         currentAxis = X;
     } else if (digitalRead(SW_1_2) == HIGH) {
@@ -349,38 +381,51 @@ void detectCurrentAxis() {
 }
 
 void forward() {
+    /*
+    Движение вперед для текущей оси (в режиме калибровки)
+    */
+
     if (currentAxis == X) {
         if (!stepperX.tick()) {
-            stepperX.setSpeed(SPEED_X);
+            stepperX.setSpeed(MAX_SPEED_X);
         }
     } else if (currentAxis == Y) {
         if (!stepperY.tick()) {
-            stepperY.setSpeed(SPEED_Y);
+            stepperY.setSpeed(MAX_SPEED_Y);
         }
     } else if (currentAxis == Z) {
         if (!stepperZ.tick()) {
-            stepperZ.setSpeed(SPEED_Z);
+            stepperZ.setSpeed(MAX_SPEED_Z);
         }
     }
 }
 
 void back() {
+    /*
+    Движение назад для текущей оси (в режиме калибровки)
+    */
+
     if (currentAxis == X) {
         if (!stepperX.tick()) {
-            stepperX.setSpeed(-SPEED_X);
+            stepperX.setSpeed(-MAX_SPEED_X);
         }
     } else if (currentAxis == Y) {
         if (!stepperY.tick()) {
-            stepperY.setSpeed(-SPEED_Y);
+            stepperY.setSpeed(-MAX_SPEED_Y);
         }
     } else if (currentAxis == Z) {
         if (!stepperZ.tick()) {
-            stepperZ.setSpeed(-SPEED_Z);
+            stepperZ.setSpeed(-MAX_SPEED_Z);
         }
     }
 }
 
 void stop() {
+    /*
+    Остановка текущей оси (в режиме калибровки)
+    или остановка всех осей (в режиме работы)
+    */
+
     if (currentMode == CALIBRATION) {
         if (currentAxis == X) {
             stepperX.brake();
@@ -397,6 +442,10 @@ void stop() {
 }
 
 void setZero() {
+    /*
+    Установка нуля для текущей оси (в режиме калибровки)
+    */
+
     if (currentAxis == X) {
         stepperX.reset();
     } else if (currentAxis == Y) {
@@ -407,38 +456,28 @@ void setZero() {
 }
 
 bool goToZero(bool moveHeadDown) {
-    bool xZeroReached = false;
-    bool yZeroReached = false;
-    bool zeroReached = false;
+    /*
+    Движение осей к текущим нулям (в режиме работы)
 
-    // Если одновременно включить 4 движка, то питание проседает,
-    // поэтому сначала выгоняю в 0 оси X, Y, а потом Z.
-    // Да и поскольку сейчас 0 у Z это нижняя точка, то надо сначала увести стол.
+    Флаг moveHeadDown позволяет при необходимости 
+    не опускать голову в конце процедуры.
+
+    Если одновременно включить 4 движка, то питание проседает,
+    поэтому сначала выгоняю в 0 оси X, Y, а потом Z.
+    Да и поскольку сейчас 0 у Z это нижняя точка, то надо сначала увести стол.
+    */
+
+    bool xyZeroReached = false;
+    bool zeroReached = false;
 
     // если голова поднята, то выгоняем оси, иначе сначала поднимаем голову
     if (headPosition == UP) {
-        if (stepperX.getCurrent() != 0) {
-            if (!stepperX.tick()) {
-                stepperX.setTarget(0);
-            }
-        } else {
-            stepperX.brake();
-            xZeroReached = true;
-        }
-
-        if (stepperY.getCurrent() != 0) {
-            if (!stepperY.tick()) {
-                stepperY.setTarget(0);
-            }
-        } else {
-            stepperY.brake();
-            yZeroReached = true;
-        }
+        xyZeroReached = goToPoint(0, 0, true);
     } else {
         moveHead(0);
     }
 
-    if (xZeroReached && yZeroReached) {
+    if (xyZeroReached) {
         // если нужно опускаем голову
         if (moveHeadDown) {
             bool headMoved = moveHead(1);
@@ -458,10 +497,21 @@ bool goToZero() {
     return goToZero(true);
 }
 
-bool goToPoint(int x, int y) {
+bool goToPoint(int x, int y, bool resetSpeed) {
+    /*
+    Движение к указанной координате (в режиме работы)
+
+    Флаг resetSpeed передаётся в correctSteppersSpeed,
+    чтобы при необходимости можно было сбросить скорости движков.
+    */
+
     bool xReached = false;
     bool yReached = false;
     bool pointReached = false;
+
+    if (!steppersSpeedCorrected) {
+        correctSteppersSpeed(x, y, resetSpeed);
+    }
 
     if (stepperX.getCurrent() != x) {
         if (!stepperX.tick()) {
@@ -483,12 +533,23 @@ bool goToPoint(int x, int y) {
 
     if (xReached && yReached) {
         pointReached = true;
+        steppersSpeedCorrected = false;
     }
 
     return pointReached;
 }
 
+bool goToPoint(int x, int y) {
+    return goToPoint(x, y, false);
+}
+
 bool moveHead(int z) {
+    /*
+    Подъём/опускание головы (в режиме работы)
+    0 - поднять
+    1 - опустить
+    */
+
     bool headMoved = false;
 
     if (z == 0) {
@@ -517,17 +578,24 @@ bool moveHead(int z) {
 }
 
 void detectLastDirections() {
-    // Алгоритм такой: 
-    //  поднимаем голову, выгоняем оси в 0 
-    //  и делаем небольшой сдвиг туда-обратно
+    /*    
+    Определяет последние направления движения осей.
+    Необходимо для дальнейшей корректировки координат
+    (если она активирована).
+
+    Алгоритм: 
+        Поднимаем голову, 
+        выгоняем оси в ноль 
+        и делаем небольшой сдвиг туда-обратно
+    */
 
     if (detectLastDirectionsState == START) {
-        bool zeroReached = goToZero(false); // гоним в 0 без опускания головы
+        bool zeroReached = goToZero(false); // гоним в 0 без опускания головы в конце
         if (zeroReached) {
             detectLastDirectionsState = ZERO_REACHED;
         }
     } else if (detectLastDirectionsState == ZERO_REACHED) {
-        bool shiftReached = goToPoint(SHIFT, SHIFT);
+        bool shiftReached = goToPoint(SHIFT, SHIFT, true);
         if (shiftReached) {
             detectLastDirectionsState = SHIFT_REACHED;
         }
@@ -543,11 +611,29 @@ void detectLastDirections() {
 }
 
 void updateLastDirections() {
+    /*
+    Обновить последние направления движения осей.
+    Необходимо для корректировки координат
+    (если она активирована).
+    */
+
     xLastDirection = xNeedDirection;
     yLastDirection = yNeedDirection;
 }
 
 int correctValue(char axis, int newValue) {
+    /*
+    Коррекция значений координат.
+    Алгоритм:
+        Определяем требуемое направление движения оси
+        Если требуемое направление противоположно последнему направлению,
+        то нужно подкорректировать значение 
+        (добавить немного шагов на "перекладывание" механики из 
+        стороны в сторону (есть небольшой люфт)).
+        Иначе, если требуемое направление сонаправленно с последним направлением,
+        то коррекция не требуется.
+    */
+
     int correctedNewValue = newValue;
 
     if (axis == 'x') {
@@ -594,7 +680,59 @@ int correctValue(char axis, int newValue) {
     return correctedNewValue;
 }
 
+void correctSteppersSpeed(int x, int y, bool resetSpeed) {
+    /*
+    Коррекция скоростей движения осей X, Y
+    Необходима для равномерного движения осей к указанной точке.
+    Например, когда выполняется рисование, одна из осей дойдёт до 
+    своей точки раньше и остановится. В этом случае будет 
+    "срезан" угол, что недопустимо.
+    Алгоритм:
+        Определяем расстояния, которые необходимо пройти осям.
+        Выбираем из них наибольшее и вычисляем время необходимое
+        для преодоления этого расстояния.
+        Затем вычисляем под это время скорость движения другой оси,
+        то есть замедляем её настолько, чтобы она двигалась 
+        синхронно с первой.
+        Ну и потом задаём эти значения движкам.
+
+    Флаг resetSpeed позволяет сбросить значения скоростей в максимальные,
+    что указываются в настройках в начале файла.
+    */
+
+    float trueSpeedX = MAX_SPEED_X;
+    float trueSpeedY = MAX_SPEED_Y;
+
+    if (!resetSpeed) {
+        int diffX = abs(stepperX.getCurrent() - x);
+        int diffY = abs(stepperY.getCurrent() - y);
+
+        if ((diffX == 0) || (diffY == 0) || (diffX == diffY)) {
+            trueSpeedX = MAX_SPEED_X;
+            trueSpeedY = MAX_SPEED_Y;
+
+        } else if (diffX > diffY) {
+            float timeX = (float)diffX / MAX_SPEED_X;
+            trueSpeedY = (float)diffY / timeX;
+
+        } else if (diffY > diffX) {
+            float timeY = (float)diffY / MAX_SPEED_Y;
+            trueSpeedX = (float)diffX / timeY;
+        }
+    }
+
+    stepperX.setMaxSpeed(trueSpeedX);
+    stepperY.setMaxSpeed(trueSpeedY);
+    steppersSpeedCorrected = true;
+}
+
 void setupCalibrationMode() {
+    /*
+    Установка конфигурации для режима калибровки.
+    Благодаря флагу calibrationModeActive
+    это выполняется один раз.
+    */
+
     if (calibrationModeActive) {
         return;
     }
@@ -616,6 +754,12 @@ void setupCalibrationMode() {
 }
 
 void setupWorkMode() {
+    /*
+    Установка конфигурации для режима работы
+    Благодаря флагу workModeActive
+    это выполняется один раз.
+    */
+
     if (workModeActive) {
         return;
     }
@@ -624,9 +768,9 @@ void setupWorkMode() {
     stepperY.setRunMode(FOLLOW_POS);
     stepperZ.setRunMode(FOLLOW_POS);
 
-    stepperX.setMaxSpeed(SPEED_X);
-    stepperY.setMaxSpeed(SPEED_Y);
-    stepperZ.setMaxSpeed(SPEED_Z);
+    stepperX.setMaxSpeed(MAX_SPEED_X);
+    stepperY.setMaxSpeed(MAX_SPEED_Y);
+    stepperZ.setMaxSpeed(MAX_SPEED_Z);
 
     stepperX.setAcceleration(0);
     stepperY.setAcceleration(0);
@@ -656,6 +800,7 @@ void setup() {
         Serial.println("ready");
     }
 
+    // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
     // generateCirclePointsArray2();
 
@@ -719,6 +864,7 @@ void loop()	{
                 yCorrection = 0;
                 awaitButton = true;
                 lastDirectionsDetected = false;
+                steppersSpeedCorrected = false;
                 workState = AWAIT_COMMAND;
                 delay(2000); // пауза для того, чтобы кнопка сразу не сработала повторно                
             }
