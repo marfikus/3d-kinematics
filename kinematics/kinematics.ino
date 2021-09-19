@@ -92,7 +92,7 @@ const bool NEXT_POINT_FROM_BUTTON = false;
     {1, 1000, 1500},
 };*/
 
-//прямоугольный треугольник 2:
+// прямоугольный треугольник 2:
 /*int POINTS[][3] = {
     {0, 500, 1000},
     {1, 2000, 1000},
@@ -113,10 +113,17 @@ const bool NEXT_POINT_FROM_BUTTON = false;
     {1, 2000, 1000},
 };*/
 
+// пятиконечная звезда:
+/*int POINTS[][3] = {
+    {0, 0, 0},
+    {1, 1079, 1846},
+    {1, 1079, },
+};*/
+
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
 // иначе (для генерируемого массива) размер задается ниже!)
-// const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
 // окружность (массив заполняется при запуске в generateCirclePointsArray
@@ -131,9 +138,9 @@ const int STEP = 50;
 // для generateCirclePointsArray:
 // const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
 // для generateCirclePointsArray2:
-const int POINTS_SIZE = 91;
+// const int POINTS_SIZE = 91;
 // создание массива для окружности:
-int POINTS[POINTS_SIZE][3];
+// int POINTS[POINTS_SIZE][3];
 
 
 enum {
@@ -343,6 +350,7 @@ void generateCirclePointsArray2() {
     */
 
     int n = POINTS_SIZE - 1;
+
     for (int i = 0; i < POINTS_SIZE; i++) {
         int x = cos(2 * PI * i / n) * RADIUS + X0;
         int y = sin(2 * PI * i / n) * RADIUS + Y0;
@@ -352,6 +360,52 @@ void generateCirclePointsArray2() {
         POINTS[i][2] = y;
     }
     POINTS[0][0] = 0;
+}
+
+void generateStarPointsArray() {
+
+    const float n = 1.618;
+
+    int a = 3000;
+    int b = round((float)a / n);
+    int c = round((float)b / n);
+    int rayWidth = b - c;
+    int rayHeight = sqrt(sq(c) - sq(rayWidth));
+
+    int startX = X0 - (c + (rayWidth / 2));
+    int startY = Y0;
+
+    int currentX = startX;
+    int currentY = startY;
+    POINTS[0][0] = 0;
+    POINTS[0][1] = currentX;
+    POINTS[0][2] = currentY;
+
+    currentX += rayHeight;
+    currentY += rayWidth / 2;
+    POINTS[1][0] = 1;
+    POINTS[1][1] = currentX;
+    POINTS[1][2] = currentY;
+
+    // currentX += rayHeight;
+    currentY += c;
+    POINTS[2][0] = 1;
+    POINTS[2][1] = currentX;
+    POINTS[2][2] = currentY;
+
+    currentX += rayHeight;
+    currentY += rayWidth / 2;
+    POINTS[3][0] = 1;
+    POINTS[3][1] = currentX;
+    POINTS[3][2] = currentY;
+
+/*    for (int i = 0; i < POINTS_SIZE; i++) {
+        currentX = 
+
+        POINTS[i][0] = 1;
+        POINTS[i][1] = x;
+        POINTS[i][2] = y;
+    }*/
 }
 
 void detectCurrentMode() {
@@ -795,10 +849,9 @@ void setup() {
     workState = AWAIT_COMMAND;
     headPosition = DOWN;
 
-
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
-    generateCirclePointsArray2();
+    // generateCirclePointsArray2();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
