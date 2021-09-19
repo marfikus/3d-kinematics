@@ -36,7 +36,7 @@ const byte BT_3 = A5; // кнопка без фиксации
 
 // активация serial:
 // (заметил, что включенный serial мешает рисовать окружности (сбивается с координат)) 
-const bool SERIAL_ENABLED = false;
+const bool SERIAL_ENABLED = true;
 const long SERIAL_SPEED = 9600;
 
 // максимальные скорости движения осей:
@@ -113,17 +113,10 @@ const bool NEXT_POINT_FROM_BUTTON = false;
     {1, 2000, 1000},
 };*/
 
-// пятиконечная звезда:
-/*int POINTS[][3] = {
-    {0, 0, 0},
-    {1, 1079, 1846},
-    {1, 1079, },
-};*/
-
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
 // иначе (для генерируемого массива) размер задается ниже!)
-const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+// const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
 // окружность (массив заполняется при запуске в generateCirclePointsArray
@@ -141,6 +134,11 @@ const int STEP = 50;
 // const int POINTS_SIZE = 91;
 // создание массива для окружности:
 // int POINTS[POINTS_SIZE][3];
+
+
+// пятиконечная звезда:
+const int POINTS_SIZE = 10;
+int POINTS[POINTS_SIZE][3];
 
 
 enum {
@@ -364,7 +362,48 @@ void generateCirclePointsArray2() {
 
 void generateStarPointsArray() {
 
-    const float n = 1.618;
+    /*
+    f — угол;
+    n — количество выпуклых вершин;
+    m — определяет, через какое количество вершин стороны будут лежать на одной прямой. 
+    Для него допустимы и отрицательные значения — от знака будет зависеть, 
+    в какую сторону будет выгибаться звезда;
+    k — жёсткость — при k=0 мы получим окружность вне зависимости от прочих параметров, 
+    при k=1 — многоугольник с прямыми линиями, 
+    при промежуточных значениях от 0 до 1 — промежуточные фигуры между окружностью и многоугольником.
+    */
+
+    float f = 0;
+    float n = 5;
+    float m = 3;
+    float k = 1;
+
+    // int p = (cos((2 * asin(k) + PI * m) / 2 * n)) / cos((2 * asin(k * cos(n * f)) + PI * m) / 2 * n);
+    float p = 0;
+
+    // int x = p * cos(f);
+    float x = 0;
+    // int y = p * sin(f);
+    float y = 0;
+
+    for (int i = f; i <= 360; i += 36) {
+        Serial.print(i);
+        Serial.print("\t");
+
+        // p = (cos((2 * asin(k) + PI * m) / 2 * n)) / cos((2 * asin(k * cos(n * (float)i)) + PI * m) / 2 * n);
+        p = (cos((2 * (1 / sin(k)) + PI * m) / 2 * n)) / cos((2 * (1 / sin(k * cos(n * (float)i))) + PI * m) / 2 * n);
+        Serial.print(p);
+        Serial.print("\t");
+
+        x = p * cos((float)i);
+        y = p * sin((float)i);
+        Serial.print(x);
+        Serial.print("\t");
+        Serial.println(y);        
+    }
+
+
+/*    const float n = 1.618;
 
     int a = 3000;
     int b = round((float)a / n);
@@ -397,7 +436,7 @@ void generateStarPointsArray() {
     currentY += rayWidth / 2;
     POINTS[3][0] = 1;
     POINTS[3][1] = currentX;
-    POINTS[3][2] = currentY;
+    POINTS[3][2] = currentY;*/
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         currentX = 
@@ -839,6 +878,10 @@ void setupWorkMode() {
 }
 
 void setup() {
+    if (SERIAL_ENABLED) {
+        Serial.begin(SERIAL_SPEED);
+    }
+
 	pinMode(BT_1, INPUT);
 	pinMode(BT_2, INPUT);
     pinMode(SW_1_1, INPUT);
@@ -852,6 +895,7 @@ void setup() {
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
     // generateCirclePointsArray2();
+    generateStarPointsArray();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
@@ -863,10 +907,7 @@ void setup() {
         Serial.println(POINTS[i][2]);
     }*/
 
-    if (SERIAL_ENABLED) {
-        Serial.begin(SERIAL_SPEED);
-        Serial.println("ready");
-    }
+    Serial.println("ready");
 }
 
 void loop()	{
