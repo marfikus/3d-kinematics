@@ -85,12 +85,12 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 };*/
 
 // равнобедренный треугольник:
-/*int POINTS[][3] = {
+int POINTS[][3] = {
     {0, 1000, 1500},
     {1, 2500, 500},
     {1, 2500, 2500},
     {1, 1000, 1500},
-};*/
+};
 
 //прямоугольный треугольник 2:
 /*int POINTS[][3] = {
@@ -113,10 +113,31 @@ const bool NEXT_POINT_FROM_BUTTON = false;
     {1, 2000, 1000},
 };*/
 
+// подобие розы ветров:
+/*int POINTS[][3] = {
+    {0, 0, 2500},
+    {1, 1500, 3000},
+    {1, 1000, 4000},
+    {1, 2000, 3500},
+    {1, 2500, 5000},
+    {1, 3000, 3500},
+    {1, 4000, 4000},
+    {1, 3500, 3000},
+    {1, 5000, 2500},
+    {1, 3500, 2000},
+    {1, 4000, 1000},
+    {1, 3000, 1500},
+    {1, 2500, 0},
+    {1, 2000, 1500},
+    {1, 1000, 1000},
+    {1, 1500, 2000},
+    {1, 0, 2500},
+};*/
+
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
 // иначе (для генерируемого массива) размер задается ниже!)
-// const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
 // окружность (массив заполняется при запуске в generateCirclePointsArray
@@ -131,9 +152,9 @@ const int STEP = 50;
 // для generateCirclePointsArray:
 // const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
 // для generateCirclePointsArray2:
-const int POINTS_SIZE = 91;
+// const int POINTS_SIZE = 91;
 // создание массива для окружности:
-int POINTS[POINTS_SIZE][3];
+// int POINTS[POINTS_SIZE][3];
 
 
 enum {
@@ -798,7 +819,7 @@ void setup() {
 
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
-    generateCirclePointsArray2();
+    // generateCirclePointsArray2();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
