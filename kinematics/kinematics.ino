@@ -1,11 +1,11 @@
 #include <GyverStepper.h>
 
-GStepper<STEPPER4WIRE> stepperX(2048, 13, 11, 12, 10);
+GStepper<STEPPER4WIRE> stepperX(2048, 5, 3, 4, 2);
 /* подключение к драйверу:
-in 1 - 10 
-in 2 - 11
-in 3 - 12
-in 4 - 13
+in 1 - 2 
+in 2 - 3
+in 3 - 4
+in 4 - 5
 */
 
 GStepper<STEPPER4WIRE> stepperY(2048, 9, 7, 8, 6);
@@ -16,12 +16,12 @@ in 3 - 8
 in 4 - 9
 */
 
-GStepper<STEPPER4WIRE> stepperZ(2048, 5, 3, 4, 2);
+GStepper<STEPPER4WIRE> stepperZ(2048, 13, 11, 12, 10);
 /* подключение к драйверу (тут на два драйвера параллельно):
-in 1 - 2 
-in 2 - 3
-in 3 - 4
-in 4 - 5
+in 1 - 10 
+in 2 - 11
+in 3 - 12
+in 4 - 13
 */
 
 // BT - кнопка, SW - тумблер
@@ -85,12 +85,12 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 };*/
 
 // равнобедренный треугольник:
-int POINTS[][3] = {
+/*int POINTS[][3] = {
     {0, 1000, 1500},
     {1, 2500, 500},
     {1, 2500, 2500},
     {1, 1000, 1500},
-};
+};*/
 
 //прямоугольный треугольник 2:
 /*int POINTS[][3] = {
@@ -116,7 +116,7 @@ int POINTS[][3] = {
 // вычисление количества элементов в массиве
 // (только если массив заполняется вручную (варианты выше),
 // иначе (для генерируемого массива) размер задается ниже!)
-const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
+// const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
 // окружность (массив заполняется при запуске в generateCirclePointsArray
@@ -131,9 +131,9 @@ const int STEP = 50;
 // для generateCirclePointsArray:
 // const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
 // для generateCirclePointsArray2:
-// const int POINTS_SIZE = 91;
+const int POINTS_SIZE = 91;
 // создание массива для окружности:
-// int POINTS[POINTS_SIZE][3];
+int POINTS[POINTS_SIZE][3];
 
 
 enum {
@@ -795,14 +795,10 @@ void setup() {
     workState = AWAIT_COMMAND;
     headPosition = DOWN;
 
-    if (SERIAL_ENABLED) {
-        Serial.begin(SERIAL_SPEED);
-        Serial.println("ready");
-    }
 
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
-    // generateCirclePointsArray2();
+    generateCirclePointsArray2();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
@@ -813,6 +809,11 @@ void setup() {
         Serial.print(" ");
         Serial.println(POINTS[i][2]);
     }*/
+
+    if (SERIAL_ENABLED) {
+        Serial.begin(SERIAL_SPEED);
+        Serial.println("ready");
+    }
 }
 
 void loop()	{
