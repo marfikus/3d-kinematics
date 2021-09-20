@@ -56,7 +56,7 @@ const int Y_CORRECTION = 0;
 const int SHIFT = 500;
 
 // верхняя и нижняя позиции головы (ось z)
-const int UP_HEAD_POSITION = -500;
+const int UP_HEAD_POSITION = -200;
 const int DOWN_HEAD_POSITION = 0;
 
 // активация режима движения к каждой точке массива по нажатию кнопки
