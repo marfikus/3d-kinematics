@@ -35,7 +35,8 @@ const byte SW_2 = A4;
 const byte BT_3 = A5; // кнопка без фиксации
 
 // активация serial:
-// (заметил, что включенный serial мешает рисовать окружности (сбивается с координат)) 
+// Заметил, что включенный serial мешает рисовать окружности с большим 
+// количеством точек(сбивается с координат).
 const bool SERIAL_ENABLED = false;
 const long SERIAL_SPEED = 9600;
 
@@ -68,13 +69,13 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 // третий элемент - координата у
 
 // прямоугольник:
-/*int POINTS[][3] = {
+int POINTS[][3] = {
     {0, 3000, 1000},
     {1, 3000, 2000},
     {1, 4000, 2000},
     {1, 4000, 1000},
     {1, 3000, 1000}
-};*/
+};
 
 //прямоугольный треугольник:
 /*int POINTS[][3] = {
@@ -85,14 +86,14 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 };*/
 
 // равнобедренный треугольник:
-int POINTS[][3] = {
+/*int POINTS[][3] = {
     {0, 1000, 1500},
     {1, 2500, 500},
     {1, 2500, 2500},
     {1, 1000, 1500},
-};
+};*/
 
-//прямоугольный треугольник 2:
+// прямоугольный треугольник 2:
 /*int POINTS[][3] = {
     {0, 500, 1000},
     {1, 2000, 1000},
@@ -134,26 +135,49 @@ int POINTS[][3] = {
     {1, 0, 2500},
 };*/
 
-// вычисление количества элементов в массиве
+// вычисление количества элементов в массиве:
 // (только если массив заполняется вручную (варианты выше),
 // иначе (для генерируемого массива) размер задается ниже!)
 const int POINTS_SIZE = sizeof(POINTS) / sizeof(POINTS[0]);
 
 
-// окружность (массив заполняется при запуске в generateCirclePointsArray
+// окружность или если использовать generateCirclePointsArray2,
+// то можно получить многоугольник с заданным числом вершин
+// (массив заполняется при запуске в generateCirclePointsArray
 // или в generateCirclePointsArray2 (раскомментировать нужное в setup)):
 // центр и радиус:
-const int X0 = 2000;
-const int Y0 = 2000;
+const int X0 = 3000;
+const int Y0 = 1000;
 const int RADIUS = 1000;
 // шаг координат (для generateCirclePointsArray):
 const int STEP = 50;
+// количество вершин (для generateCirclePointsArray2):
+// (при VERTEX_NUMBER >= 90 и включенном Serial сбивается с координат)
+// const int VERTEX_NUMBER = 3; // получим равносторонний треугольник
+const int VERTEX_NUMBER = 60; // получим вполне ровную окружность
 // размер массива: 
 // для generateCirclePointsArray:
 // const int POINTS_SIZE = ((RADIUS / STEP) * 4) + 1;
 // для generateCirclePointsArray2:
-// const int POINTS_SIZE = 91;
+// const int POINTS_SIZE = VERTEX_NUMBER + 1;
 // создание массива для окружности:
+// int POINTS[POINTS_SIZE][3];
+
+
+// звезда или другая подобная фигура с двумя радиусами (меньший и больший)
+// (массив заполняется при запуске в generateStarPointsArray
+// (раскомментировать нужное в setup)):
+// количество лучей:
+const int RAYS_NUMBER = 5;
+// центр:
+// const int X0 = 1000;
+// const int Y0 = 1000;
+// больший радиус:
+const int R1 = 1000;
+// меньший радиус:
+const int R2 = 400;
+// размер массива и его создание:
+// const int POINTS_SIZE = RAYS_NUMBER * 2 + 1;
 // int POINTS[POINTS_SIZE][3];
 
 
@@ -360,18 +384,56 @@ void generateCirclePointsArray() {
 void generateCirclePointsArray2() {
     /*
     В общем делает то же самое, что и предыдущая функция, 
-    но гораздо короче
+    но гораздо короче и наверное оптимальнее.
+    Кроме того, играясь с константами в начале файла, можно получить
+    разные многоугольники.
     */
 
-    int n = POINTS_SIZE - 1;
+    int angle = 0;
+    int angleStep = round(360 / (POINTS_SIZE - 1));
+
     for (int i = 0; i < POINTS_SIZE; i++) {
-        int x = cos(2 * PI * i / n) * RADIUS + X0;
-        int y = sin(2 * PI * i / n) * RADIUS + Y0;
 
         POINTS[i][0] = 1;
-        POINTS[i][1] = x;
-        POINTS[i][2] = y;
+        POINTS[i][1] = RADIUS * cos(radians(angle)) + X0;
+        POINTS[i][2] = RADIUS * sin(radians(angle)) + Y0;
+
+        angle += angleStep;
     }
+
+    POINTS[0][0] = 0;
+}
+
+void generateStarPointsArray() {
+    /*
+    Генерирует точки звезды с заданным количеством лучей.
+    Больший радиус определяет крайнюю точку луча, 
+    меньший - основание. 
+    Играясь с константами в начале файла, можно получить разные фигуры.
+    */
+
+    int angle1 = 0;
+    int angle2 = round(360 / (POINTS_SIZE - 1));
+    int angleStep = angle2 * 2;
+
+    for (int i = 0, j = 1; j < POINTS_SIZE; i += 2, j += 2) {
+
+        POINTS[i][0] = 1;
+        POINTS[i][1] = R1 * cos(radians(angle1)) + X0;
+        POINTS[i][2] = R1 * sin(radians(angle1)) + Y0;
+
+        POINTS[j][0] = 1;
+        POINTS[j][1] = R2 * cos(radians(angle2)) + X0;
+        POINTS[j][2] = R2 * sin(radians(angle2)) + Y0;
+
+        angle1 += angleStep;
+        angle2 += angleStep;
+    }
+
+    POINTS[POINTS_SIZE - 1][0] = 1;
+    POINTS[POINTS_SIZE - 1][1] = POINTS[0][1];
+    POINTS[POINTS_SIZE - 1][2] = POINTS[0][2];
+
     POINTS[0][0] = 0;
 }
 
@@ -806,6 +868,10 @@ void setupWorkMode() {
 }
 
 void setup() {
+    if (SERIAL_ENABLED) {
+        Serial.begin(SERIAL_SPEED);
+    }
+
 	pinMode(BT_1, INPUT);
 	pinMode(BT_2, INPUT);
     pinMode(SW_1_1, INPUT);
@@ -816,10 +882,10 @@ void setup() {
     workState = AWAIT_COMMAND;
     headPosition = DOWN;
 
-
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
     // generateCirclePointsArray2();
+    // generateStarPointsArray();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
@@ -829,12 +895,9 @@ void setup() {
         Serial.print(POINTS[i][1]);
         Serial.print(" ");
         Serial.println(POINTS[i][2]);
-    }*/
-
-    if (SERIAL_ENABLED) {
-        Serial.begin(SERIAL_SPEED);
-        Serial.println("ready");
     }
+*/
+    Serial.println("ready");
 }
 
 void loop()	{
