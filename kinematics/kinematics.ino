@@ -122,8 +122,8 @@ const bool NEXT_POINT_FROM_BUTTON = false;
 // окружность (массив заполняется при запуске в generateCirclePointsArray
 // или в generateCirclePointsArray2 (раскомментировать нужное в setup)):
 // центр и радиус:
-const int X0 = 2000;
-const int Y0 = 2000;
+// const int X0 = 2000;
+// const int Y0 = 2000;
 const int RADIUS = 1000;
 // шаг координат (для generateCirclePointsArray):
 const int STEP = 50;
@@ -136,8 +136,13 @@ const int STEP = 50;
 // int POINTS[POINTS_SIZE][3];
 
 
-// пятиконечная звезда:
-const int POINTS_SIZE = 10;
+// пятиконечная звезда (массив заполняется при запуске в generateStarPointsArray
+// или в generateStarPointsArray2 (раскомментировать нужное в setup)):
+const int X0 = 1000;
+const int Y0 = 1000;
+const int R1 = 1000;
+const int R2 = 400;
+const int POINTS_SIZE = 11;
 int POINTS[POINTS_SIZE][3];
 
 
@@ -401,50 +406,32 @@ void generateStarPointsArray() {
         Serial.print("\t");
         Serial.println(y);        
     }
+}
 
+void generateStarPointsArray2() {
+    int angle1 = 0;
+    int angle2 = 36;
+    int angleStep = 72;
 
-/*    const float n = 1.618;
-
-    int a = 3000;
-    int b = round((float)a / n);
-    int c = round((float)b / n);
-    int rayWidth = b - c;
-    int rayHeight = sqrt(sq(c) - sq(rayWidth));
-
-    int startX = X0 - (c + (rayWidth / 2));
-    int startY = Y0;
-
-    int currentX = startX;
-    int currentY = startY;
-    POINTS[0][0] = 0;
-    POINTS[0][1] = currentX;
-    POINTS[0][2] = currentY;
-
-    currentX += rayHeight;
-    currentY += rayWidth / 2;
-    POINTS[1][0] = 1;
-    POINTS[1][1] = currentX;
-    POINTS[1][2] = currentY;
-
-    // currentX += rayHeight;
-    currentY += c;
-    POINTS[2][0] = 1;
-    POINTS[2][1] = currentX;
-    POINTS[2][2] = currentY;
-
-    currentX += rayHeight;
-    currentY += rayWidth / 2;
-    POINTS[3][0] = 1;
-    POINTS[3][1] = currentX;
-    POINTS[3][2] = currentY;*/
-
-/*    for (int i = 0; i < POINTS_SIZE; i++) {
-        currentX = 
+    for (int i = 0, j = 1; j < POINTS_SIZE; i += 2, j += 2) {
 
         POINTS[i][0] = 1;
-        POINTS[i][1] = x;
-        POINTS[i][2] = y;
-    }*/
+        POINTS[i][1] = R1 * cos(radians(angle1)) + X0;
+        POINTS[i][2] = R1 * sin(radians(angle1)) + Y0;
+
+        POINTS[j][0] = 1;
+        POINTS[j][1] = R2 * cos(radians(angle2)) + X0;
+        POINTS[j][2] = R2 * sin(radians(angle2)) + Y0;
+
+        angle1 += angleStep;
+        angle2 += angleStep;
+    }
+
+    POINTS[POINTS_SIZE - 1][0] = 1;
+    POINTS[POINTS_SIZE - 1][1] = POINTS[0][1];
+    POINTS[POINTS_SIZE - 1][2] = POINTS[0][2];
+
+    POINTS[0][0] = 0;
 }
 
 void detectCurrentMode() {
@@ -895,7 +882,7 @@ void setup() {
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
     // generateCirclePointsArray2();
-    generateStarPointsArray();
+    generateStarPointsArray2();
 
 /*    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
@@ -907,7 +894,7 @@ void setup() {
         Serial.println(POINTS[i][2]);
     }*/
 
-    Serial.println("ready");
+    // Serial.println("ready");
 }
 
 void loop()	{
