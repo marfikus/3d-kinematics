@@ -136,13 +136,19 @@ const int STEP = 50;
 // int POINTS[POINTS_SIZE][3];
 
 
-// пятиконечная звезда (массив заполняется при запуске в generateStarPointsArray
-// или в generateStarPointsArray2 (раскомментировать нужное в setup)):
+// звезда (массив заполняется при запуске в generateStarPointsArray
+// (раскомментировать нужное в setup)):
+// количество лучей:
+const int RAYS_NUMBER = 5;
+// центр:
 const int X0 = 1000;
 const int Y0 = 1000;
+// больший радиус:
 const int R1 = 1000;
+// меньший радиус:
 const int R2 = 400;
-const int POINTS_SIZE = 11;
+
+const int POINTS_SIZE = RAYS_NUMBER * 2 + 1;
 int POINTS[POINTS_SIZE][3];
 
 
@@ -366,52 +372,20 @@ void generateCirclePointsArray2() {
 }
 
 void generateStarPointsArray() {
-
     /*
-    f — угол;
-    n — количество выпуклых вершин;
-    m — определяет, через какое количество вершин стороны будут лежать на одной прямой. 
-    Для него допустимы и отрицательные значения — от знака будет зависеть, 
-    в какую сторону будет выгибаться звезда;
-    k — жёсткость — при k=0 мы получим окружность вне зависимости от прочих параметров, 
-    при k=1 — многоугольник с прямыми линиями, 
-    при промежуточных значениях от 0 до 1 — промежуточные фигуры между окружностью и многоугольником.
+    Генерирует точки звезды с заданным количеством лучей.
+    Больший радиус определяет крайнюю точку луча, 
+    меньший - основание. 
+    Играясь с константами, можно получить разные фигуры.
     */
 
-    float f = 0;
-    float n = 5;
-    float m = 3;
-    float k = 1;
-
-    // int p = (cos((2 * asin(k) + PI * m) / 2 * n)) / cos((2 * asin(k * cos(n * f)) + PI * m) / 2 * n);
-    float p = 0;
-
-    // int x = p * cos(f);
-    float x = 0;
-    // int y = p * sin(f);
-    float y = 0;
-
-    for (int i = f; i <= 360; i += 36) {
-        Serial.print(i);
-        Serial.print("\t");
-
-        // p = (cos((2 * asin(k) + PI * m) / 2 * n)) / cos((2 * asin(k * cos(n * (float)i)) + PI * m) / 2 * n);
-        p = (cos((2 * (1 / sin(k)) + PI * m) / 2 * n)) / cos((2 * (1 / sin(k * cos(n * (float)i))) + PI * m) / 2 * n);
-        Serial.print(p);
-        Serial.print("\t");
-
-        x = p * cos((float)i);
-        y = p * sin((float)i);
-        Serial.print(x);
-        Serial.print("\t");
-        Serial.println(y);        
-    }
-}
-
-void generateStarPointsArray2() {
     int angle1 = 0;
-    int angle2 = 36;
-    int angleStep = 72;
+    int angle2 = round(360 / (POINTS_SIZE - 1));
+    int angleStep = angle2 * 2;
+
+    Serial.println(POINTS_SIZE);
+    Serial.println(angle2);
+    Serial.println(angleStep);
 
     for (int i = 0, j = 1; j < POINTS_SIZE; i += 2, j += 2) {
 
@@ -882,9 +856,9 @@ void setup() {
     // если раскомментировать одну из этих строк, то нужно также поправить настройки вверху!
     // generateCirclePointsArray();
     // generateCirclePointsArray2();
-    generateStarPointsArray2();
+    generateStarPointsArray();
 
-/*    for (int i = 0; i < POINTS_SIZE; i++) {
+    for (int i = 0; i < POINTS_SIZE; i++) {
         Serial.print(i);
         Serial.print(") ");
         Serial.print(POINTS[i][0]);
@@ -892,9 +866,9 @@ void setup() {
         Serial.print(POINTS[i][1]);
         Serial.print(" ");
         Serial.println(POINTS[i][2]);
-    }*/
+    }
 
-    // Serial.println("ready");
+    Serial.println("ready");
 }
 
 void loop()	{
